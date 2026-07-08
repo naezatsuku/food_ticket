@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find ~/AppData/Local/ms-playwright/chromium-1223 -iname \"*.exe\" 2>/dev/null)",
+      "Read(//c/Users/owner/AppData/Local/ms-playwright/chromium-1223/**)"
+    ]
+  }
+}
