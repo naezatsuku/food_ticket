@@ -12,12 +12,20 @@ import { NumberingPanel, SheetSettingsPanel, TicketSettingsPanel } from "./Setti
 import { SheetPreview } from "./SheetPreview";
 
 export function TicketApp() {
-  const [state, dispatch] = useReducer(reducer, undefined, () => loadState() ?? defaultAppState());
-  const hydrated = true;
+  const [state, dispatch] = useReducer(reducer, undefined, () => defaultAppState());
+  const [hydrated, setHydrated] = useState(false);
   const [fontTick, setFontTick] = useState(0);
   const [range, setRange] = useState({ start: 1, end: 40 });
 
-  // 自動保存
+  // マウント後(クライアントのみ)に保存済み設定を読み込む。
+  // サーバー描画時は localStorage が存在しないため、初期状態は必ず defaultAppState() に揃えてハイドレーション不一致を防ぐ。
+  useEffect(() => {
+    const loaded = loadState();
+    if (loaded) dispatch({ type: "state/replace", state: loaded });
+    setHydrated(true);
+  }, []);
+
+  // 自動保存(読み込み完了前に空状態で上書き保存しないよう hydrated を待つ)
   useEffect(() => {
     if (hydrated) saveState(state);
   }, [state, hydrated]);
