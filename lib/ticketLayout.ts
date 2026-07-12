@@ -25,7 +25,7 @@ export interface RectMm {
   h: number;
 }
 
-/** 券1枚のレイアウト��算結果(mm 座標、券の左上原点)。プレビューと PDF が共有する */
+/** 券1枚のレイアウト計算結果(mm 座標、券の左上原点)。プレビューと PDF が共有する */
 export interface TicketLayout {
   widthMm: number;
   heightMm: number;
@@ -137,6 +137,8 @@ export interface TicketContent {
 const PAD = 3; // 券内の基本パディング(mm)
 const BORDER_W = 0.5; // 枠線の太さ(mm、印刷時は画面プレビューで最低2px相当になるよう別途下限あり)
 const NUMBER_SIZE = 2.2; // 番号のフォントサイズ(mm。商品名・値段より控えめに)
+const PRICE_MAX_SIZE = 2.2; // 値段の最大フォントサイズ(mm。番号と同じサイズに)
+const MIN_SPACING = 1; // 番号・商品名・値段の間の最小スペース(mm)
 
 /**
  * 券1枚分のレイアウトを計算する純粋関数。
@@ -203,28 +205,33 @@ export function computeTicketLayout(
   // ---- 本券(メイン領域) ----
   const mainX0 = stub ? stubW + PAD : PAD;
   const mainX1 = w - PAD;
-  const nameTop = PAD + NUMBER_SIZE + 2.5; // 商品名を置ける上限(番号の下)
+  const nameTop = PAD + NUMBER_SIZE + MIN_SPACING; // 商品名を置ける上限(番号の下)
 
-  // 商品名・値段は同じ最大サイズを基準にし、見た目の大きさを揃える
-  // 番号を小さくした分の余白を商品名・値段に回し、視認性を優先する
-  const largeTextMax = Math.min(h * 0.2, 10);
   // 商品名がこれを下回ると文字がつぶれて読みにくくなるため、
   // イラストを控えめにしてでも確保したい下限サイズ
   const NAME_LEGIBLE_MIN = 4.5;
 
   // 指定した textW を前提に、値段・商品名のフィット結果を計算する
+  // ナンバー、商品名、値段が重ならないようスペース計算
   function fitContent(textW: number) {
     let priceTop = contentBottom;
     let priceSize = 0;
+    
+    // 値段: 最大サイズを PRICE_MAX_SIZE に制限
     if (content.priceText) {
-      priceSize = fitFontSize(measure, content.priceText, textW, largeTextMax, 3);
+      priceSize = fitFontSize(measure, content.priceText, textW, PRICE_MAX_SIZE, 2);
       priceTop = contentBottom - priceSize;
     }
-    const nameBottomLimit = content.priceText ? priceTop - 2 : contentBottom;
+    
+    // 商品名の利用可能エリア
+    // nameTop（番号の下端） から priceTop（値段の上端）までの間に商品名を配置
+    const nameMaxHeight = priceTop - nameTop - MIN_SPACING;
+    
     const fittedName = content.name
-      ? fitWrappedText(measure, content.name, textW, nameBottomLimit - nameTop, largeTextMax, 3)
+      ? fitWrappedText(measure, content.name, textW, nameMaxHeight, 8, 2.5)
       : null;
-    return { priceTop, priceSize, nameBottomLimit, fittedName };
+    
+    return { priceTop, priceSize, fittedName };
   }
 
   // イラスト領域: 右端に正方形を確保(参考画像と同じく右側・上下中央)。
@@ -233,12 +240,14 @@ export function computeTicketLayout(
   let illustrationBox: RectMm | null = null;
   let textW = mainX1 - mainX0;
   let fit = fitContent(textW);
+  
   if (content.illustration.kind !== "none") {
     const maxSide = Math.min((h - PAD * 2) * 0.7, (mainX1 - mainX0) * 0.45, 30);
     const minSide = 14; // これより小さくすると絵として認識しづらいため下限とする
     let side = maxSide;
     let candidateTextW = mainX1 - side - 2 - mainX0;
     let candidateFit = fitContent(candidateTextW);
+    
     while (
       side > minSide &&
       content.name &&
@@ -248,6 +257,7 @@ export function computeTicketLayout(
       candidateTextW = mainX1 - side - 2 - mainX0;
       candidateFit = fitContent(candidateTextW);
     }
+    
     if (side >= 6) {
       illustrationBox = {
         x: mainX1 - side,
@@ -261,37 +271,74 @@ export function computeTicketLayout(
   }
 
   // 番号(左上) - 本券側は、利用可能な幅に収まるよう自動縮小
+  const numberSize = fitFontSize(measure, content.numberText, mainX1 - mainX0 - PAD, NUMBER_SIZE, 1.5);
   texts.push({
     text: content.numberText,
     xMm: mainX0,
     yTopMm: PAD,
-    sizeMm: fitFontSize(measure, content.numberText, mainX1 - mainX0 - PAD, NUMBER_SIZE, 1.5),
+    sizeMm: numberSize,
     weight: "regular",
     color: "ink",
   });
 
-  // 値段(下端に固定)
+  // 値段(下端に固定) - 重なり防止のため priceTop を再計算
   if (content.priceText) {
+    // 商品名があれば、商品名と値段の間に最小スペースを確保
+    let finalPriceTop = fit.priceTop;
+    if (content.name && fit.fittedName) {
+      const nameBottomY = nameTop + fit.fittedName.lines.length * fit.fittedName.sizeMm * LINE_HEIGHT;
+      const minRequiredTop = nameBottomY + MIN_SPACING;
+      finalPriceTop = Math.max(finalPriceTop, minRequiredTop);
+    }
+    
     texts.push({
       text: content.priceText,
       xMm: mainX0,
-      yTopMm: fit.priceTop,
+      yTopMm: finalPriceTop,
       sizeMm: fit.priceSize,
       weight: "bold",
       color: "ink",
     });
   }
 
-  // 商品名(大)。券の縦方向中央に配置しつつ、番号・値段とは重ならないよう���する
+  // 商品名(大)。番号・値段とは絶対に重ならないようにする
   if (content.name && fit.fittedName) {
     const fitted = fit.fittedName;
-    const nameBottomLimit = fit.nameBottomLimit;
     const blockH = fitted.lines.length * fitted.sizeMm * LINE_HEIGHT;
+    
+    // 商品名の配置: nameTop から始まり、値段の上 MIN_SPACING mm 上までの空間に収める
+    let priceTopForName = fit.priceTop;
+    if (content.priceText) {
+      priceTopForName = fit.priceTop - MIN_SPACING;
+    }
+    
+    const maxNameHeight = priceTopForName - nameTop;
+    
+    // 配置済みの商品名サイズが収まらない場合、再計算して縮小
+    if (blockH > maxNameHeight && maxNameHeight > 0) {
+      const refittedName = fitWrappedText(
+        measure,
+        content.name,
+        textW,
+        maxNameHeight,
+        fitted.sizeMm,
+        2
+      );
+      fitted.sizeMm = refittedName.sizeMm;
+      fitted.lines = refittedName.lines;
+    }
+    
     // 券の縦中央に寄せつつ、番号の下・値段の上の範囲からははみ出さない
-    const yStart = Math.min(
-      Math.max(h / 2 - blockH / 2, nameTop),
-      Math.max(nameBottomLimit - blockH, nameTop)
+    const finalBlockH = fitted.lines.length * fitted.sizeMm * LINE_HEIGHT;
+    const availableHeight = priceTopForName - nameTop;
+    const yStart = Math.max(
+      nameTop,
+      Math.min(
+        availableHeight / 2 + nameTop - finalBlockH / 2,
+        priceTopForName - finalBlockH
+      )
     );
+    
     fitted.lines.forEach((line, i) => {
       texts.push({
         text: line,
