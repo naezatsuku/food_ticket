@@ -25,7 +25,7 @@ export interface RectMm {
   h: number;
 }
 
-/** 券1枚のレイアウト計算結果(mm 座標、券の左上原点)。プレビューと PDF が共有する */
+/** 券1枚のレイアウト��算結果(mm 座標、券の左上原点)。プレビューと PDF が共有する */
 export interface TicketLayout {
   widthMm: number;
   heightMm: number;
@@ -167,7 +167,7 @@ export function computeTicketLayout(
       text: content.numberText,
       xMm: PAD,
       yTopMm: PAD,
-      sizeMm: fitFontSize(measure, content.numberText, stubInnerW, NUMBER_SIZE, 2),
+      sizeMm: fitFontSize(measure, content.numberText, stubInnerW, NUMBER_SIZE, 1.5),
       weight: "regular",
       color: "ink",
     });
@@ -260,12 +260,12 @@ export function computeTicketLayout(
     }
   }
 
-  // 番号(左上)
+  // 番号(左上) - 本券側は、利用可能な幅に収まるよう自動縮小
   texts.push({
     text: content.numberText,
     xMm: mainX0,
     yTopMm: PAD,
-    sizeMm: NUMBER_SIZE,
+    sizeMm: fitFontSize(measure, content.numberText, mainX1 - mainX0 - PAD, NUMBER_SIZE, 1.5),
     weight: "regular",
     color: "ink",
   });
@@ -282,7 +282,7 @@ export function computeTicketLayout(
     });
   }
 
-  // 商品名(大)。券の縦方向中央に配置しつつ、番号・値段とは重ならないようにする
+  // 商品名(大)。券の縦方向中央に配置しつつ、番号・値段とは重ならないよう���する
   if (content.name && fit.fittedName) {
     const fitted = fit.fittedName;
     const nameBottomLimit = fit.nameBottomLimit;
