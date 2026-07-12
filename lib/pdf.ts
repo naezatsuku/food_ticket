@@ -198,9 +198,11 @@ export async function generateTicketsPdf(input: PdfJobInput): Promise<PdfJobResu
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   const bytes = await loadFontBytes();
+  
+  // subset: false で全文字を埋め込む（日本語文字化け対策）
   const [regular, bold] = await Promise.all([
-    doc.embedFont(bytes.regular, { subset: true }),
-    doc.embedFont(bytes.bold, { subset: true }),
+    doc.embedFont(bytes.regular, { subset: false }),
+    doc.embedFont(bytes.bold, { subset: false }),
   ]);
   const fonts = { regular, bold };
 
