@@ -30,6 +30,19 @@ beforeAll(() => {
 describe("generateTicketsPdf(統合)", () => {
   it("A4縦・90×50mm・4桁・No.0001〜0040 → 4ページのPDFが正しい寸法で生成される", async () => {
     const d = defaultAppState();
+    const ticket: typeof d.ticket = {
+      widthMm: 90,
+      heightMm: 50,
+      stubEnabled: true,
+      stubWidthMm: 25,
+    };
+    const sheet: typeof d.sheet = {
+      paper: "A4",
+      orientation: "portrait",
+      marginMm: 10,
+      cutGuide: "dashed",
+      manualGrid: null,
+    };
     const result = await generateTicketsPdf({
       product: {
         ...d.products[0],
@@ -37,9 +50,9 @@ describe("generateTicketsPdf(統合)", () => {
         price: 500,
         illustration: { kind: "image", dataUrl: TINY_PNG },
       },
-      ticket: d.ticket, // 90×50mm・半券あり
+      ticket, // 90×50mm・半券あり
       numbering: { prefix: "No.", digits: 4 },
-      sheet: d.sheet, // A4縦・余白10mm・破線ガイド
+      sheet, // A4縦・余白10mm・破線ガイド
       startNumber: 1,
       endNumber: 40,
     });
