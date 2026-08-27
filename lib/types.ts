@@ -97,7 +97,7 @@ export function defaultAppState(): AppState {
     sheet: {
       paper: "A3",
       orientation: "portrait",
-      marginMm: 10,
+      marginMm: 0,
       cutGuide: "dashed",
       manualGrid: null,
     },
