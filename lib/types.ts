@@ -92,10 +92,10 @@ export function defaultAppState(): AppState {
   });
   return {
     products: [sample],
-    ticket: { widthMm: 90, heightMm: 50, stubEnabled: true, stubWidthMm: 25 },
+    ticket: { widthMm: 49, heightMm: 17, stubEnabled: true, stubWidthMm: 13 },
     numbering: { prefix: "No.", digits: 4 },
     sheet: {
-      paper: "A4",
+      paper: "A3",
       orientation: "portrait",
       marginMm: 10,
       cutGuide: "dashed",
