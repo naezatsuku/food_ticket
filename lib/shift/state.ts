@@ -32,7 +32,21 @@ export type Action =
   | { type: "people/remove"; id: string }
   | { type: "people/clear" }
   | { type: "assignments/replace"; assignments: Assignment[] }
+  | { type: "assignments/place"; slotId: string; roleId: string; personId: string }
+  | { type: "assignments/remove"; slotId: string; roleId: string; personId: string }
+  | { type: "assignments/swap"; a: AssignmentKey; b: AssignmentKey }
+  | { type: "assignments/toggleLock"; slotId: string; roleId: string; personId: string }
   | { type: "state/replace"; project: ShiftProject };
+
+export interface AssignmentKey {
+  slotId: string;
+  roleId: string;
+  personId: string;
+}
+
+function sameAssignment(a: Assignment, key: AssignmentKey): boolean {
+  return a.slotId === key.slotId && a.roleId === key.roleId && a.personId === key.personId;
+}
 
 /** 存在しなくなった枠IDへの必要人数設定を取り除く */
 function pruneRequirements(roles: Role[], validSlotIds: Set<string>): Role[] {
@@ -187,6 +201,44 @@ export function reducer(state: ShiftProject, action: Action): ShiftProject {
 
     case "assignments/replace":
       return { ...state, assignments: action.assignments };
+    case "assignments/place": {
+      const { slotId, roleId, personId } = action;
+      if (state.assignments.some((a) => sameAssignment(a, { slotId, roleId, personId }))) return state;
+      return {
+        ...state,
+        assignments: [...state.assignments, { slotId, roleId, personId, locked: true }],
+      };
+    }
+    case "assignments/remove":
+      return {
+        ...state,
+        assignments: state.assignments.filter((a) => !sameAssignment(a, action)),
+      };
+    case "assignments/swap": {
+      const { a, b } = action;
+      if (sameAssignment({ ...a, locked: false }, b)) return state;
+      let sawA = false;
+      let sawB = false;
+      const assignments = state.assignments.map((assignment) => {
+        if (sameAssignment(assignment, a)) {
+          sawA = true;
+          return { slotId: b.slotId, roleId: b.roleId, personId: a.personId, locked: true };
+        }
+        if (sameAssignment(assignment, b)) {
+          sawB = true;
+          return { slotId: a.slotId, roleId: a.roleId, personId: b.personId, locked: true };
+        }
+        return assignment;
+      });
+      return sawA && sawB ? { ...state, assignments } : state;
+    }
+    case "assignments/toggleLock":
+      return {
+        ...state,
+        assignments: state.assignments.map((a) =>
+          sameAssignment(a, action) ? { ...a, locked: !a.locked } : a
+        ),
+      };
 
     case "state/replace":
       return action.project;

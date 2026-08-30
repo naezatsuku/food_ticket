@@ -100,4 +100,76 @@ describe("reducer", () => {
     state = reducer(state, { type: "people/remove", id: "p1" });
     expect(state.assignments).toEqual([{ slotId, roleId, personId: "p2", locked: false }]);
   });
+
+  it("assignments/place で手動配置するとロック済みになる", () => {
+    const state = reducer(defaultShiftProject(), {
+      type: "assignments/place",
+      slotId: "s1",
+      roleId: "r1",
+      personId: "p1",
+    });
+    expect(state.assignments).toEqual([{ slotId: "s1", roleId: "r1", personId: "p1", locked: true }]);
+  });
+
+  it("assignments/place は同じセルへの重複を無視する", () => {
+    let state = reducer(defaultShiftProject(), {
+      type: "assignments/place",
+      slotId: "s1",
+      roleId: "r1",
+      personId: "p1",
+    });
+    state = reducer(state, { type: "assignments/place", slotId: "s1", roleId: "r1", personId: "p1" });
+    expect(state.assignments).toHaveLength(1);
+  });
+
+  it("assignments/remove で割当を取り除く", () => {
+    let state = reducer(defaultShiftProject(), {
+      type: "assignments/place",
+      slotId: "s1",
+      roleId: "r1",
+      personId: "p1",
+    });
+    state = reducer(state, { type: "assignments/remove", slotId: "s1", roleId: "r1", personId: "p1" });
+    expect(state.assignments).toEqual([]);
+  });
+
+  it("assignments/swap で2人の配置先を入れ替え、両方ロックする", () => {
+    let state = reducer(defaultShiftProject(), {
+      type: "assignments/replace",
+      assignments: [
+        { slotId: "s1", roleId: "r1", personId: "p1", locked: false },
+        { slotId: "s2", roleId: "r1", personId: "p2", locked: false },
+      ],
+    });
+    state = reducer(state, {
+      type: "assignments/swap",
+      a: { slotId: "s1", roleId: "r1", personId: "p1" },
+      b: { slotId: "s2", roleId: "r1", personId: "p2" },
+    });
+    expect(state.assignments).toEqual([
+      { slotId: "s2", roleId: "r1", personId: "p1", locked: true },
+      { slotId: "s1", roleId: "r1", personId: "p2", locked: true },
+    ]);
+  });
+
+  it("assignments/toggleLock でロック状態を反転する", () => {
+    let state = reducer(defaultShiftProject(), {
+      type: "assignments/replace",
+      assignments: [{ slotId: "s1", roleId: "r1", personId: "p1", locked: false }],
+    });
+    state = reducer(state, {
+      type: "assignments/toggleLock",
+      slotId: "s1",
+      roleId: "r1",
+      personId: "p1",
+    });
+    expect(state.assignments[0].locked).toBe(true);
+    state = reducer(state, {
+      type: "assignments/toggleLock",
+      slotId: "s1",
+      roleId: "r1",
+      personId: "p1",
+    });
+    expect(state.assignments[0].locked).toBe(false);
+  });
 });
