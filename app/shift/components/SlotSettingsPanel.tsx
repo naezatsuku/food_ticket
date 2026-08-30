@@ -1,0 +1,203 @@
+"use client";
+
+import type { Dispatch } from "react";
+import { Button, ErrorList, Field, inputClass, NumberInput, Section } from "@/app/components/ui";
+import type { Action } from "@/lib/shift/state";
+import { generateSlots, validateSlotGeneration } from "@/lib/shift/slots";
+import type { ShiftProject } from "@/lib/shift/types";
+
+export function SlotSettingsPanel({
+  project,
+  dispatch,
+}: {
+  project: ShiftProject;
+  dispatch: Dispatch<Action>;
+}) {
+  const { slotGeneration, slots } = project;
+  const errors = validateSlotGeneration(slotGeneration);
+  const preview = errors.length === 0 ? generateSlots(slotGeneration) : [];
+
+  return (
+    <div className="space-y-4">
+      <Section title="時間枠の一括生成">
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="開始時刻">
+            <input
+              type="time"
+              className={inputClass}
+              value={slotGeneration.start}
+              onChange={(e) =>
+                dispatch({ type: "slotGeneration/set", patch: { start: e.target.value } })
+              }
+            />
+          </Field>
+          <Field label="終了時刻">
+            <input
+              type="time"
+              className={inputClass}
+              value={slotGeneration.end}
+              onChange={(e) =>
+                dispatch({ type: "slotGeneration/set", patch: { end: e.target.value } })
+              }
+            />
+          </Field>
+          <Field label="1コマの長さ(分)">
+            <NumberInput
+              value={slotGeneration.intervalMinutes}
+              min={1}
+              onChange={(n) =>
+                dispatch({
+                  type: "slotGeneration/set",
+                  patch: { intervalMinutes: Math.max(1, Math.trunc(n)) },
+                })
+              }
+            />
+          </Field>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">
+              休憩時間帯(この時間は枠を作りません)
+            </span>
+            <Button variant="ghost" onClick={() => dispatch({ type: "slotGeneration/addBreak" })}>
+              + 追加
+            </Button>
+          </div>
+          {slotGeneration.breaks.length === 0 && (
+            <p className="text-xs text-slate-400">休憩時間はありません。</p>
+          )}
+          {slotGeneration.breaks.map((b, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="time"
+                className={inputClass}
+                value={b.start}
+                onChange={(e) =>
+                  dispatch({
+                    type: "slotGeneration/updateBreak",
+                    index: i,
+                    patch: { start: e.target.value },
+                  })
+                }
+              />
+              <span className="text-xs text-slate-400">〜</span>
+              <input
+                type="time"
+                className={inputClass}
+                value={b.end}
+                onChange={(e) =>
+                  dispatch({
+                    type: "slotGeneration/updateBreak",
+                    index: i,
+                    patch: { end: e.target.value },
+                  })
+                }
+              />
+              <Button
+                variant="ghost"
+                onClick={() => dispatch({ type: "slotGeneration/removeBreak", index: i })}
+              >
+                削除
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        <ErrorList errors={errors} />
+
+        <Button
+          variant="primary"
+          disabled={errors.length > 0}
+          onClick={() => {
+            const ok =
+              slots.length === 0 ||
+              confirm(
+                `既存の枠(${slots.length}件)を置き換えて、新たに${preview.length}件の枠を生成します。個別に設定した必要人数の割り当てはリセットされます。よろしいですか?`
+              );
+            if (ok) dispatch({ type: "slotGeneration/apply" });
+          }}
+        >
+          枠を生成({preview.length}件)
+        </Button>
+      </Section>
+
+      <Section title={`個別の枠(${slots.length}件)`}>
+        {slots.length === 0 ? (
+          <p className="text-sm text-slate-400">
+            まだ枠がありません。上で一括生成するか、下のボタンで追加してください。
+          </p>
+        ) : (
+          <div className="max-h-96 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-slate-500">
+                  <th className="py-1 pr-2 font-medium">開始</th>
+                  <th className="py-1 pr-2 font-medium">終了</th>
+                  <th className="py-1 pr-2 font-medium">必要人数</th>
+                  <th className="py-1 font-medium" />
+                </tr>
+              </thead>
+              <tbody>
+                {slots.map((slot) => (
+                  <tr key={slot.id} className="border-b border-slate-100">
+                    <td className="py-1 pr-2">
+                      <input
+                        type="time"
+                        className={inputClass}
+                        value={slot.start}
+                        onChange={(e) =>
+                          dispatch({
+                            type: "slot/update",
+                            id: slot.id,
+                            patch: { start: e.target.value },
+                          })
+                        }
+                      />
+                    </td>
+                    <td className="py-1 pr-2">
+                      <input
+                        type="time"
+                        className={inputClass}
+                        value={slot.end}
+                        onChange={(e) =>
+                          dispatch({
+                            type: "slot/update",
+                            id: slot.id,
+                            patch: { end: e.target.value },
+                          })
+                        }
+                      />
+                    </td>
+                    <td className="py-1 pr-2">
+                      <NumberInput
+                        value={slot.capacity}
+                        min={0}
+                        onChange={(n) =>
+                          dispatch({
+                            type: "slot/update",
+                            id: slot.id,
+                            patch: { capacity: Math.max(0, Math.trunc(n)) },
+                          })
+                        }
+                      />
+                    </td>
+                    <td className="py-1 text-right">
+                      <Button
+                        variant="danger"
+                        onClick={() => dispatch({ type: "slot/remove", id: slot.id })}
+                      >
+                        削除
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <Button onClick={() => dispatch({ type: "slot/add" })}>+ 枠を手動追加</Button>
+      </Section>
+    </div>
+  );
+}
