@@ -124,6 +124,17 @@ export function createTimeSlot(partial?: Partial<TimeSlot>): TimeSlot {
   };
 }
 
+export function createPerson(partial?: Partial<Person>): Person {
+  return {
+    id: crypto.randomUUID(),
+    name: "",
+    available: [],
+    maxSlots: null,
+    rolePreference: {},
+    ...partial,
+  };
+}
+
 export function defaultShiftProject(): ShiftProject {
   return {
     id: "default",

@@ -3,6 +3,7 @@ import { createRole, createTimeSlot } from "./types";
 import { setRequirement } from "./roles";
 import type {
   BreakPeriod,
+  Person,
   Role,
   ShiftProject,
   SlotGenerationSettings,
@@ -25,6 +26,10 @@ export type Action =
   | { type: "role/remove"; id: string }
   | { type: "requirement/set"; roleId: string; slotId: string; patch: { min?: number; max?: number } }
   | { type: "requirement/bulkApply"; roleId: string; min: number; max: number }
+  | { type: "people/replace"; people: Person[] }
+  | { type: "people/update"; id: string; patch: Partial<Person> }
+  | { type: "people/remove"; id: string }
+  | { type: "people/clear" }
   | { type: "state/replace"; project: ShiftProject };
 
 /** 存在しなくなった枠IDへの必要人数設定を取り除く */
@@ -122,6 +127,18 @@ export function reducer(state: ShiftProject, action: Action): ShiftProject {
           );
         }),
       };
+
+    case "people/replace":
+      return { ...state, people: action.people };
+    case "people/update":
+      return {
+        ...state,
+        people: state.people.map((p) => (p.id === action.id ? { ...p, ...action.patch } : p)),
+      };
+    case "people/remove":
+      return { ...state, people: state.people.filter((p) => p.id !== action.id) };
+    case "people/clear":
+      return { ...state, people: [] };
 
     case "state/replace":
       return action.project;

@@ -6,6 +6,7 @@ import { reducer } from "@/lib/shift/state";
 import { LocalStorageAdapter } from "@/lib/shift/storage";
 import { defaultShiftProject } from "@/lib/shift/types";
 import { ComingSoonPanel } from "./ComingSoonPanel";
+import { ImportPanel } from "./ImportPanel";
 import { ProjectPanel } from "./ProjectPanel";
 import { RoleSettingsPanel } from "./RoleSettingsPanel";
 import { SlotSettingsPanel } from "./SlotSettingsPanel";
@@ -61,6 +62,7 @@ export function ShiftApp() {
       {step === 0 && <ProjectPanel project={project} dispatch={dispatch} />}
       {step === 1 && <SlotSettingsPanel project={project} dispatch={dispatch} />}
       {step === 2 && <RoleSettingsPanel project={project} dispatch={dispatch} />}
+      {step === 3 && <ImportPanel project={project} dispatch={dispatch} />}
       {step >= IMPLEMENTED_STEP_COUNT && <ComingSoonPanel title={STEP_LABELS[step]} />}
 
       <nav className="mt-6 flex justify-between">
