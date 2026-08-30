@@ -10,9 +10,11 @@ import { defaultShiftProject } from "@/lib/shift/types";
 export function ProjectPanel({
   project,
   dispatch,
+  onBackToList,
 }: {
   project: ShiftProject;
   dispatch: Dispatch<Action>;
+  onBackToList: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -36,7 +38,7 @@ export function ProjectPanel({
           `シフト設定を読み込みます(枠 ${imported.slots.length} 件・役割 ${imported.roles.length} 件)。現在の内容は上書きされます。よろしいですか?`
         )
       ) {
-        dispatch({ type: "state/replace", project: imported });
+        dispatch({ type: "state/replace", project: { ...imported, id: project.id } });
       }
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "読み込みに失敗しました。");
@@ -45,6 +47,10 @@ export function ProjectPanel({
 
   return (
     <div className="space-y-4">
+      <Button variant="ghost" onClick={onBackToList}>
+        ← プロジェクト一覧に戻る
+      </Button>
+
       <Section title="プロジェクト">
         <Field label="シフト表の名前">
           <input
@@ -81,7 +87,7 @@ export function ProjectPanel({
             variant="danger"
             onClick={() => {
               if (confirm("シフトの設定をすべて初期状態に戻します。よろしいですか?")) {
-                dispatch({ type: "state/replace", project: defaultShiftProject() });
+                dispatch({ type: "state/replace", project: { ...defaultShiftProject(), id: project.id } });
               }
             }}
           >

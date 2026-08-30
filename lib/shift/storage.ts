@@ -8,7 +8,19 @@ import type {
 } from "./types";
 import { defaultShiftProject } from "./types";
 
-const STORAGE_KEY = "food-ticket-shift-v1";
+const STORAGE_KEY = "food-ticket-shift-projects-v1";
+/** Phase 1〜2 で使っていた単一プロジェクト用の旧キー(移行のためだけに残す) */
+const LEGACY_SINGLE_PROJECT_KEY = "food-ticket-shift-v1";
+
+/** 保存対象1件分: プロジェクト一覧と、最後に開いていたプロジェクト */
+export interface ProjectsFile {
+  projects: ShiftProject[];
+  activeProjectId: string | null;
+}
+
+function defaultProjectsFile(): ProjectsFile {
+  return { projects: [], activeProjectId: null };
+}
 
 /**
  * データ保存先を抽象化するインターフェース。
@@ -16,8 +28,8 @@ const STORAGE_KEY = "food-ticket-shift-v1";
  * 同じインターフェースを満たす ApiAdapter に差し替えるだけで済む設計にしている。
  */
 export interface StorageAdapter {
-  load(): Promise<ShiftProject | null>;
-  save(project: ShiftProject): Promise<void>;
+  load(): Promise<ProjectsFile>;
+  save(file: ProjectsFile): Promise<void>;
 }
 
 function normalizeRequirement(raw: unknown): RoleRequirement[] {
@@ -94,14 +106,14 @@ function normalizeAssignments(raw: unknown): Assignment[] {
 }
 
 /** 不明な形の入力をデフォルト値にマージして ShiftProject に正規化する */
-function normalize(raw: unknown): ShiftProject {
+function normalizeProject(raw: unknown): ShiftProject {
   if (typeof raw !== "object" || raw === null) {
     throw new Error("シフトデータの形式が不正です(オブジェクトではありません)。");
   }
   const d = defaultShiftProject();
   const r = raw as Partial<ShiftProject>;
   return {
-    id: typeof r.id === "string" ? r.id : d.id,
+    id: typeof r.id === "string" && r.id !== "" ? r.id : crypto.randomUUID(),
     name: typeof r.name === "string" ? r.name : d.name,
     slotGeneration: {
       start:
@@ -132,20 +144,55 @@ function normalize(raw: unknown): ShiftProject {
   };
 }
 
+/** 不明な形の入力をデフォルト値にマージして ProjectsFile に正規化する */
+function normalizeProjectsFile(raw: unknown): ProjectsFile {
+  if (typeof raw !== "object" || raw === null) {
+    throw new Error("シフトデータの形式が不正です(オブジェクトではありません)。");
+  }
+  const r = raw as Partial<ProjectsFile>;
+  const projects = Array.isArray(r.projects) ? r.projects.map(normalizeProject) : [];
+  const activeProjectId =
+    typeof r.activeProjectId === "string" && projects.some((p) => p.id === r.activeProjectId)
+      ? r.activeProjectId
+      : null;
+  return { projects, activeProjectId };
+}
+
 export class LocalStorageAdapter implements StorageAdapter {
-  async load(): Promise<ShiftProject | null> {
+  async load(): Promise<ProjectsFile> {
     try {
       const json = localStorage.getItem(STORAGE_KEY);
-      if (!json) return null;
-      return normalize(JSON.parse(json));
+      if (json) return normalizeProjectsFile(JSON.parse(json));
     } catch {
-      return null;
+      return defaultProjectsFile();
+    }
+    return this.migrateLegacySingleProject();
+  }
+
+  /** Phase 1〜2 の単一プロジェクト保存(旧キー)からの一度きりの移行 */
+  private async migrateLegacySingleProject(): Promise<ProjectsFile> {
+    try {
+      const legacyJson = localStorage.getItem(LEGACY_SINGLE_PROJECT_KEY);
+      if (!legacyJson) return defaultProjectsFile();
+      const project = normalizeProject(JSON.parse(legacyJson));
+      const isEmpty =
+        project.name === "" &&
+        project.slots.length === 0 &&
+        project.roles.length === 0 &&
+        project.people.length === 0;
+      if (isEmpty) return defaultProjectsFile();
+      const file: ProjectsFile = { projects: [project], activeProjectId: project.id };
+      await this.save(file);
+      localStorage.removeItem(LEGACY_SINGLE_PROJECT_KEY);
+      return file;
+    } catch {
+      return defaultProjectsFile();
     }
   }
 
-  async save(project: ShiftProject): Promise<void> {
+  async save(file: ProjectsFile): Promise<void> {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(file));
     } catch {
       // 容量超過時は自動保存をあきらめる(エクスポート/インポートは引き続き使える)
     }
@@ -164,5 +211,5 @@ export function parseImportedProject(json: string): ShiftProject {
   } catch {
     throw new Error("JSONとして読み込めませんでした。エクスポートしたファイルを指定してください。");
   }
-  return normalize(raw);
+  return normalizeProject(raw);
 }
