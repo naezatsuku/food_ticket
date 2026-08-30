@@ -7,14 +7,14 @@ import type { Action } from "@/lib/shift/state";
 import { LocalStorageAdapter } from "@/lib/shift/storage";
 import type { ShiftProject } from "@/lib/shift/types";
 import { AssignPanel } from "./AssignPanel";
-import { ComingSoonPanel } from "./ComingSoonPanel";
 import { EditPanel } from "./EditPanel";
+import { ExportPanel } from "./ExportPanel";
 import { ImportPanel } from "./ImportPanel";
 import { ProjectListView } from "./ProjectListView";
 import { ProjectPanel } from "./ProjectPanel";
 import { RoleSettingsPanel } from "./RoleSettingsPanel";
 import { SlotSettingsPanel } from "./SlotSettingsPanel";
-import { IMPLEMENTED_STEP_COUNT, STEP_LABELS, StepIndicator } from "./StepIndicator";
+import { STEP_LABELS, StepIndicator } from "./StepIndicator";
 
 const storage = new LocalStorageAdapter();
 
@@ -95,7 +95,7 @@ function ProjectWizard({
       {step === 3 && <ImportPanel project={project} dispatch={projectDispatch} />}
       {step === 4 && <AssignPanel project={project} dispatch={projectDispatch} />}
       {step === 5 && <EditPanel project={project} dispatch={projectDispatch} />}
-      {step >= IMPLEMENTED_STEP_COUNT && <ComingSoonPanel title={STEP_LABELS[step]} />}
+      {step === 6 && <ExportPanel project={project} />}
 
       <nav className="mt-6 flex justify-between">
         <Button

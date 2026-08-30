@@ -10,9 +10,6 @@ export const STEP_LABELS = [
   "出力",
 ] as const;
 
-/** 実装済みのステップ数(先頭からこの件数だけ機能する) */
-export const IMPLEMENTED_STEP_COUNT = 6;
-
 export function StepIndicator({
   step,
   onSelect,
@@ -24,7 +21,6 @@ export function StepIndicator({
     <ol className="flex flex-wrap items-center gap-1.5 text-xs">
       {STEP_LABELS.map((label, i) => {
         const active = i === step;
-        const implemented = i < IMPLEMENTED_STEP_COUNT;
         return (
           <li key={label}>
             <button
@@ -33,9 +29,7 @@ export function StepIndicator({
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-colors ${
                 active
                   ? "bg-blue-600 text-white"
-                  : implemented
-                    ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                    : "border border-dashed border-slate-300 bg-slate-100 text-slate-400 hover:bg-slate-200"
+                  : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
               <span
@@ -46,7 +40,6 @@ export function StepIndicator({
                 {i + 1}
               </span>
               {label}
-              {!implemented && <span className="text-[10px]">(準備中)</span>}
             </button>
           </li>
         );
