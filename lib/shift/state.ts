@@ -2,6 +2,7 @@ import { generateSlots } from "./slots";
 import { createRole, createTimeSlot } from "./types";
 import { setRequirement } from "./roles";
 import type {
+  Assignment,
   BreakPeriod,
   Person,
   Role,
@@ -30,6 +31,7 @@ export type Action =
   | { type: "people/update"; id: string; patch: Partial<Person> }
   | { type: "people/remove"; id: string }
   | { type: "people/clear" }
+  | { type: "assignments/replace"; assignments: Assignment[] }
   | { type: "state/replace"; project: ShiftProject };
 
 /** 存在しなくなった枠IDへの必要人数設定を取り除く */
@@ -38,6 +40,18 @@ function pruneRequirements(roles: Role[], validSlotIds: Set<string>): Role[] {
     ...r,
     requirement: r.requirement.filter((req) => validSlotIds.has(req.slotId)),
   }));
+}
+
+/** 削除された枠・役割・人を参照する割当を取り除く */
+function pruneAssignments(
+  assignments: Assignment[],
+  validSlotIds: Set<string>,
+  validRoleIds: Set<string>,
+  validPersonIds: Set<string>
+): Assignment[] {
+  return assignments.filter(
+    (a) => validSlotIds.has(a.slotId) && validRoleIds.has(a.roleId) && validPersonIds.has(a.personId)
+  );
 }
 
 export function reducer(state: ShiftProject, action: Action): ShiftProject {
@@ -95,8 +109,15 @@ export function reducer(state: ShiftProject, action: Action): ShiftProject {
       };
     case "slot/remove": {
       const slots = state.slots.filter((s) => s.id !== action.id);
-      const roles = pruneRequirements(state.roles, new Set(slots.map((s) => s.id)));
-      return { ...state, slots, roles };
+      const validSlotIds = new Set(slots.map((s) => s.id));
+      const roles = pruneRequirements(state.roles, validSlotIds);
+      const assignments = pruneAssignments(
+        state.assignments,
+        validSlotIds,
+        new Set(roles.map((r) => r.id)),
+        new Set(state.people.map((p) => p.id))
+      );
+      return { ...state, slots, roles, assignments };
     }
 
     case "role/add":
@@ -106,8 +127,16 @@ export function reducer(state: ShiftProject, action: Action): ShiftProject {
         ...state,
         roles: state.roles.map((r) => (r.id === action.id ? { ...r, ...action.patch } : r)),
       };
-    case "role/remove":
-      return { ...state, roles: state.roles.filter((r) => r.id !== action.id) };
+    case "role/remove": {
+      const roles = state.roles.filter((r) => r.id !== action.id);
+      const assignments = pruneAssignments(
+        state.assignments,
+        new Set(state.slots.map((s) => s.id)),
+        new Set(roles.map((r) => r.id)),
+        new Set(state.people.map((p) => p.id))
+      );
+      return { ...state, roles, assignments };
+    }
 
     case "requirement/set":
       return {
@@ -128,17 +157,36 @@ export function reducer(state: ShiftProject, action: Action): ShiftProject {
         }),
       };
 
-    case "people/replace":
-      return { ...state, people: action.people };
+    case "people/replace": {
+      const validPersonIds = new Set(action.people.map((p) => p.id));
+      const assignments = pruneAssignments(
+        state.assignments,
+        new Set(state.slots.map((s) => s.id)),
+        new Set(state.roles.map((r) => r.id)),
+        validPersonIds
+      );
+      return { ...state, people: action.people, assignments };
+    }
     case "people/update":
       return {
         ...state,
         people: state.people.map((p) => (p.id === action.id ? { ...p, ...action.patch } : p)),
       };
-    case "people/remove":
-      return { ...state, people: state.people.filter((p) => p.id !== action.id) };
+    case "people/remove": {
+      const people = state.people.filter((p) => p.id !== action.id);
+      const assignments = pruneAssignments(
+        state.assignments,
+        new Set(state.slots.map((s) => s.id)),
+        new Set(state.roles.map((r) => r.id)),
+        new Set(people.map((p) => p.id))
+      );
+      return { ...state, people, assignments };
+    }
     case "people/clear":
-      return { ...state, people: [] };
+      return { ...state, people: [], assignments: [] };
+
+    case "assignments/replace":
+      return { ...state, assignments: action.assignments };
 
     case "state/replace":
       return action.project;

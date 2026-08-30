@@ -11,7 +11,7 @@ export const STEP_LABELS = [
 ] as const;
 
 /** 実装済みのステップ数(先頭からこの件数だけ機能する) */
-export const IMPLEMENTED_STEP_COUNT = 4;
+export const IMPLEMENTED_STEP_COUNT = 5;
 
 export function StepIndicator({
   step,

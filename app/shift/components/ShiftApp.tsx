@@ -6,6 +6,7 @@ import { appReducer, defaultAppState, type AppAction } from "@/lib/shift/appStat
 import type { Action } from "@/lib/shift/state";
 import { LocalStorageAdapter } from "@/lib/shift/storage";
 import type { ShiftProject } from "@/lib/shift/types";
+import { AssignPanel } from "./AssignPanel";
 import { ComingSoonPanel } from "./ComingSoonPanel";
 import { ImportPanel } from "./ImportPanel";
 import { ProjectListView } from "./ProjectListView";
@@ -91,6 +92,7 @@ function ProjectWizard({
       {step === 1 && <SlotSettingsPanel project={project} dispatch={projectDispatch} />}
       {step === 2 && <RoleSettingsPanel project={project} dispatch={projectDispatch} />}
       {step === 3 && <ImportPanel project={project} dispatch={projectDispatch} />}
+      {step === 4 && <AssignPanel project={project} dispatch={projectDispatch} />}
       {step >= IMPLEMENTED_STEP_COUNT && <ComingSoonPanel title={STEP_LABELS[step]} />}
 
       <nav className="mt-6 flex justify-between">

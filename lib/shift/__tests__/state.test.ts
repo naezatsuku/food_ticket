@@ -58,4 +58,46 @@ describe("reducer", () => {
     state = reducer(state, { type: "role/remove", id: roleId });
     expect(state.roles).toHaveLength(0);
   });
+
+  it("slot/remove すると、その枠を参照する割当も消える", () => {
+    let state = reducer(defaultShiftProject(), {
+      type: "slotGeneration/set",
+      patch: { start: "09:00", end: "09:20", intervalMinutes: 20, breaks: [] },
+    });
+    state = reducer(state, { type: "slotGeneration/apply" });
+    const slotId = state.slots[0].id;
+    state = reducer(state, {
+      type: "assignments/replace",
+      assignments: [{ slotId, roleId: "r1", personId: "p1", locked: false }],
+    });
+    state = reducer(state, { type: "slot/remove", id: slotId });
+    expect(state.assignments).toEqual([]);
+  });
+
+  it("people/remove すると、その人の割当も消える(他の割当は残る)", () => {
+    let state = reducer(defaultShiftProject(), {
+      type: "slotGeneration/set",
+      patch: { start: "09:00", end: "09:20", intervalMinutes: 20, breaks: [] },
+    });
+    state = reducer(state, { type: "slotGeneration/apply" });
+    state = reducer(state, { type: "role/add" });
+    const slotId = state.slots[0].id;
+    const roleId = state.roles[0].id;
+    state = reducer(state, {
+      type: "people/replace",
+      people: [
+        { id: "p1", name: "A", available: [], maxSlots: null, rolePreference: {} },
+        { id: "p2", name: "B", available: [], maxSlots: null, rolePreference: {} },
+      ],
+    });
+    state = reducer(state, {
+      type: "assignments/replace",
+      assignments: [
+        { slotId, roleId, personId: "p1", locked: false },
+        { slotId, roleId, personId: "p2", locked: false },
+      ],
+    });
+    state = reducer(state, { type: "people/remove", id: "p1" });
+    expect(state.assignments).toEqual([{ slotId, roleId, personId: "p2", locked: false }]);
+  });
 });
