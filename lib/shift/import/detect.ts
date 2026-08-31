@@ -7,17 +7,29 @@ export type ImportFormat = "long" | "wide";
 export function guessHasHeaderRow(grid: ParsedGrid): boolean {
   if (grid.length < 2) return false;
   const header = grid[0];
-  const headerTimeRangeCount = header.filter((c) => cellLooksLikeTimeRange(c)).length;
-  // ワイド形式はヘッダ行に時刻レンジが2個以上並ぶので、それだけでヘッダありと判定する
-  if (headerTimeRangeCount >= 2) return true;
+  const body = grid.slice(1);
+  const headerTimeRangeCols = header
+    .map((c, i) => (cellLooksLikeTimeRange(c) ? i : -1))
+    .filter((i) => i >= 0);
+  const headerTimeRangeCount = headerTimeRangeCols.length;
+  // ワイド形式はヘッダ行に時刻レンジが2個以上並ぶので、それだけでヘッダありと判定する。
+  // ただし本体行の同じ列にも実際の時刻レンジが入っている場合は、
+  // ワイド形式の見出し(時刻レンジそのものが列名)ではなく「1行=1人・時刻レンジ列が複数
+  // (日付ごとの列など)」というロング形式のデータ行である可能性が高いので、ヘッダとは判定しない。
+  if (headerTimeRangeCount >= 2) {
+    const bodyAlsoHasTimeRangeInSameCols = headerTimeRangeCols.some((col) =>
+      body.some((row) => cellLooksLikeTimeRange(row[col] ?? ""))
+    );
+    if (!bodyAlsoHasTimeRangeInSameCols) return true;
+  }
 
-  const bodyHasTimeRange = grid.slice(1).some((row) => row.some((c) => cellLooksLikeTimeRange(c)));
+  const bodyHasTimeRange = body.some((row) => row.some((c) => cellLooksLikeTimeRange(c)));
   // ヘッダ行自体には時刻レンジが無く、他の行にはある場合(ロング形式)はヘッダありと判定する
   if (headerTimeRangeCount === 0 && bodyHasTimeRange) return true;
 
   const isNumericCell = (c: string) => c.trim() !== "" && /^[0-9]+(\.[0-9]+)?$/.test(c.trim());
   const headerNumericRatio = ratio(header, isNumericCell);
-  const bodyNumericRatio = ratio(grid.slice(1).flat(), isNumericCell);
+  const bodyNumericRatio = ratio(body.flat(), isNumericCell);
   // ヘッダ行は数値が少なく、本体は数値が多い場合もヘッダありと判定する
   return headerNumericRatio < 0.2 && bodyNumericRatio > 0.5;
 }
