@@ -52,6 +52,7 @@ function normalizeSlots(raw: unknown): TimeSlot[] {
     .filter((s): s is Record<string, unknown> => typeof s === "object" && s !== null)
     .map((s) => ({
       id: typeof s.id === "string" ? s.id : crypto.randomUUID(),
+      date: typeof s.date === "string" ? s.date : "",
       start: typeof s.start === "string" ? s.start : "00:00",
       end: typeof s.end === "string" ? s.end : "00:00",
       capacity: typeof s.capacity === "number" ? s.capacity : 1,
@@ -78,13 +79,19 @@ function normalizePeople(raw: unknown): Person[] {
       id: typeof p.id === "string" ? p.id : crypto.randomUUID(),
       name: typeof p.name === "string" ? p.name : "",
       available: Array.isArray(p.available)
-        ? p.available.filter(
-            (a): a is { start: string; end: string } =>
-              typeof a === "object" &&
-              a !== null &&
-              typeof (a as { start?: unknown }).start === "string" &&
-              typeof (a as { end?: unknown }).end === "string"
-          )
+        ? p.available
+            .filter(
+              (a): a is { date?: unknown; start: string; end: string } =>
+                typeof a === "object" &&
+                a !== null &&
+                typeof (a as { start?: unknown }).start === "string" &&
+                typeof (a as { end?: unknown }).end === "string"
+            )
+            .map((a) => ({
+              date: typeof a.date === "string" ? a.date : "",
+              start: a.start,
+              end: a.end,
+            }))
         : [],
       maxSlots: typeof p.maxSlots === "number" ? p.maxSlots : null,
       rolePreference:
@@ -118,6 +125,7 @@ function normalizeProject(raw: unknown): ShiftProject {
     id: typeof r.id === "string" && r.id !== "" ? r.id : crypto.randomUUID(),
     name: typeof r.name === "string" ? r.name : d.name,
     slotGeneration: {
+      date: typeof r.slotGeneration?.date === "string" ? r.slotGeneration.date : d.slotGeneration.date,
       start:
         typeof r.slotGeneration?.start === "string" ? r.slotGeneration.start : d.slotGeneration.start,
       end: typeof r.slotGeneration?.end === "string" ? r.slotGeneration.end : d.slotGeneration.end,
@@ -152,11 +160,13 @@ function normalizeSlotPresets(raw: unknown): SlotPreset[] {
   return raw
     .filter((p): p is Record<string, unknown> => typeof p === "object" && p !== null)
     .map((p) => {
-      const g = p.slotGeneration as Partial<ShiftProject["slotGeneration"]> | undefined;
+      // "template" が正式なフィールド名。旧バージョン(日付非対応時代)で
+      // "slotGeneration" として保存されたプリセットも読み込めるようにする
+      const g = (p.template ?? p.slotGeneration) as Partial<ShiftProject["slotGeneration"]> | undefined;
       return {
         id: typeof p.id === "string" && p.id !== "" ? p.id : crypto.randomUUID(),
         name: typeof p.name === "string" ? p.name : "",
-        slotGeneration: {
+        template: {
           start: typeof g?.start === "string" ? g.start : d.slotGeneration.start,
           end: typeof g?.end === "string" ? g.end : d.slotGeneration.end,
           intervalMinutes:

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Field, inputClass, Section } from "@/app/components/ui";
 import { canvasToBlob, renderScheduleToCanvas } from "@/lib/shift/render/canvas";
 import { buildLongFormatCsv, buildPersonCsv, buildWideFormatCsv, type WideAxis } from "@/lib/shift/render/csv";
 import { csvToBlob, type CsvEncoding } from "@/lib/shift/render/encoding";
+import { formatDateShort } from "@/lib/shift/slots";
 import type { ShiftProject } from "@/lib/shift/types";
 
 type CsvFormat = "long" | "wide-role" | "wide-person";
@@ -20,8 +21,13 @@ function downloadBlob(blob: Blob, filename: string) {
 
 export function ExportPanel({ project }: { project: ShiftProject }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const configuredDates = useMemo(
+    () => Array.from(new Set(project.slots.map((s) => s.date))).sort(),
+    [project.slots]
+  );
+  const [exportDate, setExportDate] = useState(configuredDates[0] ?? "");
   const [title, setTitle] = useState(project.name || "シフト表");
-  const [subtitle, setSubtitle] = useState("");
+  const [subtitle, setSubtitle] = useState(configuredDates[0] ? formatDateShort(configuredDates[0]) : "");
   const [background, setBackground] = useState<"white" | "transparent">("white");
   const [scale, setScale] = useState(2);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -30,18 +36,28 @@ export function ExportPanel({ project }: { project: ShiftProject }) {
   const [csvEncoding, setCsvEncoding] = useState<CsvEncoding>("utf8-bom");
   const [personId, setPersonId] = useState(project.people[0]?.id ?? "");
 
+  // 選択中の日付が消えた(枠が削除された等)場合は、レンダー中に先頭の日付へ読み替える
+  // (useEffect で setState すると余分な再レンダーが挟まるため、ここでは派生値として計算する)
+  const effectiveExportDate = configuredDates.includes(exportDate) ? exportDate : (configuredDates[0] ?? "");
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    renderScheduleToCanvas(canvas, project, { title, subtitle, background, scale });
-  }, [project, title, subtitle, background, scale]);
+    renderScheduleToCanvas(canvas, project, {
+      title,
+      subtitle,
+      date: effectiveExportDate,
+      background,
+      scale,
+    });
+  }, [project, title, subtitle, effectiveExportDate, background, scale]);
 
   async function handleDownloadPng() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const blob = await canvasToBlob(canvas);
     if (!blob) return;
-    downloadBlob(blob, `${title || "シフト表"}.png`);
+    downloadBlob(blob, `${title || "シフト表"}_${effectiveExportDate || "無題"}.png`);
   }
 
   async function handleCopyPng() {
@@ -87,15 +103,33 @@ export function ExportPanel({ project }: { project: ShiftProject }) {
           </p>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
+          {configuredDates.length > 0 && (
+            <Field label="対象日(PNGは1日ずつ出力します)">
+              <select
+                className={inputClass}
+                value={effectiveExportDate}
+                onChange={(e) => {
+                  setExportDate(e.target.value);
+                  setSubtitle(formatDateShort(e.target.value));
+                }}
+              >
+                {configuredDates.map((d) => (
+                  <option key={d} value={d}>
+                    {formatDateShort(d)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="タイトル">
             <input type="text" className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
           </Field>
-          <Field label="サブタイトル(任意、日付など)">
+          <Field label="サブタイトル(任意)">
             <input
               type="text"
               className={inputClass}
               value={subtitle}
-              placeholder="例: 2026-08-30"
+              placeholder="例: 9/13"
               onChange={(e) => setSubtitle(e.target.value)}
             />
           </Field>
@@ -131,6 +165,7 @@ export function ExportPanel({ project }: { project: ShiftProject }) {
       </Section>
 
       <Section title="CSV出力">
+        <p className="text-xs text-slate-400">CSVは全日程分をまとめて出力します(「日付」列付き)。</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="形式">
             <select className={inputClass} value={csvFormat} onChange={(e) => setCsvFormat(e.target.value as CsvFormat)}>

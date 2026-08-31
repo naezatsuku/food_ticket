@@ -10,25 +10,32 @@ function toCsvString(rows: string[][]): string {
 }
 
 function sortedSlots(project: ShiftProject) {
-  return [...project.slots].sort((a, b) => a.start.localeCompare(b.start));
+  return [...project.slots].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start)
+  );
 }
 
-/** ロング形式(1行=1割当: 時刻,役割,氏名) */
+/** ロング形式(1行=1割当: 日付,時刻,役割,氏名) */
 export function buildLongFormatCsv(project: ShiftProject): string {
   const personById = new Map(project.people.map((p) => [p.id, p]));
   const slotById = new Map(project.slots.map((s) => [s.id, s]));
   const roleById = new Map(project.roles.map((r) => [r.id, r]));
 
   const sorted = [...project.assignments].sort((a, b) => {
-    const sa = slotById.get(a.slotId)?.start ?? "";
-    const sb = slotById.get(b.slotId)?.start ?? "";
-    return sa.localeCompare(sb) || a.roleId.localeCompare(b.roleId);
+    const sa = slotById.get(a.slotId);
+    const sb = slotById.get(b.slotId);
+    return (
+      (sa?.date ?? "").localeCompare(sb?.date ?? "") ||
+      (sa?.start ?? "").localeCompare(sb?.start ?? "") ||
+      a.roleId.localeCompare(b.roleId)
+    );
   });
 
-  const rows: string[][] = [["時刻", "役割", "氏名"]];
+  const rows: string[][] = [["日付", "時刻", "役割", "氏名"]];
   for (const a of sorted) {
     const slot = slotById.get(a.slotId);
     rows.push([
+      slot?.date ?? "",
       slot ? `${slot.start}-${slot.end}` : a.slotId,
       roleById.get(a.roleId)?.name ?? a.roleId,
       personById.get(a.personId)?.name ?? a.personId,
@@ -39,16 +46,16 @@ export function buildLongFormatCsv(project: ShiftProject): string {
 
 export type WideAxis = "role" | "person";
 
-/** ワイド形式(行=時間枠、列=役割 または 人) */
+/** ワイド形式(行=日付+時間枠、列=役割 または 人) */
 export function buildWideFormatCsv(project: ShiftProject, axis: WideAxis): string {
   const slots = sortedSlots(project);
 
   if (axis === "role") {
     const personById = new Map(project.people.map((p) => [p.id, p]));
-    const header = ["時刻", ...project.roles.map((r) => r.name || "無題")];
+    const header = ["日付", "時刻", ...project.roles.map((r) => r.name || "無題")];
     const rows: string[][] = [header];
     for (const slot of slots) {
-      const row = [`${slot.start}-${slot.end}`];
+      const row = [slot.date, `${slot.start}-${slot.end}`];
       for (const role of project.roles) {
         const names = project.assignments
           .filter((a) => a.slotId === slot.id && a.roleId === role.id)
@@ -61,10 +68,10 @@ export function buildWideFormatCsv(project: ShiftProject, axis: WideAxis): strin
   }
 
   const roleById = new Map(project.roles.map((r) => [r.id, r]));
-  const header = ["時刻", ...project.people.map((p) => p.name || "無題")];
+  const header = ["日付", "時刻", ...project.people.map((p) => p.name || "無題")];
   const rows: string[][] = [header];
   for (const slot of slots) {
-    const row = [`${slot.start}-${slot.end}`];
+    const row = [slot.date, `${slot.start}-${slot.end}`];
     for (const person of project.people) {
       const a = project.assignments.find((x) => x.slotId === slot.id && x.personId === person.id);
       row.push(a ? (roleById.get(a.roleId)?.name ?? a.roleId) : "");
@@ -82,15 +89,21 @@ export function buildPersonCsv(project: ShiftProject, personId: string): string 
   const mine = project.assignments
     .filter((a) => a.personId === personId)
     .sort((a, b) => {
-      const sa = slotById.get(a.slotId)?.start ?? "";
-      const sb = slotById.get(b.slotId)?.start ?? "";
-      return sa.localeCompare(sb);
+      const sa = slotById.get(a.slotId);
+      const sb = slotById.get(b.slotId);
+      return (
+        (sa?.date ?? "").localeCompare(sb?.date ?? "") || (sa?.start ?? "").localeCompare(sb?.start ?? "")
+      );
     });
 
-  const rows: string[][] = [["時刻", "役割"]];
+  const rows: string[][] = [["日付", "時刻", "役割"]];
   for (const a of mine) {
     const slot = slotById.get(a.slotId);
-    rows.push([slot ? `${slot.start}-${slot.end}` : a.slotId, roleById.get(a.roleId)?.name ?? a.roleId]);
+    rows.push([
+      slot?.date ?? "",
+      slot ? `${slot.start}-${slot.end}` : a.slotId,
+      roleById.get(a.roleId)?.name ?? a.roleId,
+    ]);
   }
   return toCsvString(rows);
 }

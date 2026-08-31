@@ -19,9 +19,30 @@ export function formatMinutesToTime(totalMinutes: number): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
+const DATE_RE = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
+
+/** "2026-09-13" 形式で、実在するカレンダー上の日付かどうかを検証する */
+export function isValidDate(value: string): boolean {
+  const m = DATE_RE.exec(value.trim());
+  if (!m) return false;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const d = new Date(year, month - 1, day);
+  return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day;
+}
+
+/** "2026-09-13" を "9/13" のような短い表示形式に変換する(年は表示しない) */
+export function formatDateShort(value: string): string {
+  const m = DATE_RE.exec(value.trim());
+  if (!m) return value;
+  return `${Number(m[2])}/${Number(m[3])}`;
+}
+
 /** 一括生成設定を検証し、問題があれば日本語のエラーメッセージ一覧を返す */
 export function validateSlotGeneration(settings: SlotGenerationSettings): string[] {
   const errors: string[] = [];
+  if (!isValidDate(settings.date)) errors.push("対象日を選択してください。");
   const start = parseTimeToMinutes(settings.start);
   const end = parseTimeToMinutes(settings.end);
   if (start === null) errors.push("開始時刻の形式が不正です。");
@@ -45,7 +66,7 @@ export function validateSlotGeneration(settings: SlotGenerationSettings): string
 }
 
 /**
- * 開始〜終了時刻を1コマの長さで分割して時間枠を生成する。
+ * 対象日の開始〜終了時刻を1コマの長さで分割して時間枠を生成する。
  * 休憩時間帯と重なるコマは生成しない。設定が不正な場合は空配列を返す。
  */
 export function generateSlots(
@@ -68,6 +89,7 @@ export function generateSlots(
     if (overlapsBreak) continue;
     slots.push({
       id: crypto.randomUUID(),
+      date: settings.date,
       start: formatMinutesToTime(t),
       end: formatMinutesToTime(slotEnd),
       capacity: defaultCapacity,

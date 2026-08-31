@@ -7,7 +7,7 @@ function makeRole(partial?: Partial<Role>): Role {
 }
 
 function makeSlot(partial?: Partial<TimeSlot>): TimeSlot {
-  return { id: "s1", start: "09:00", end: "09:20", capacity: 2, ...partial };
+  return { id: "s1", date: "", start: "09:00", end: "09:20", capacity: 2, ...partial };
 }
 
 describe("requirementFor", () => {

@@ -10,14 +10,16 @@ import {
   inferWideFormatColumns,
 } from "@/lib/shift/import/detect";
 import { parseDelimitedText, parseHtmlTable, type ParsedGrid } from "@/lib/shift/import/parseSource";
-import { parseTimeRangeToken } from "@/lib/shift/import/text";
+import { parseSingleDateTimeRange } from "@/lib/shift/import/text";
 import {
   buildPeopleFromLongFormat,
   buildPeopleFromWideFormat,
+  resolveDate,
   type PersonDraft,
   type WideTimeColumn,
 } from "@/lib/shift/import/toPeople";
 import { parseWorkbookFile, type ParsedWorkbook } from "@/lib/shift/import/workbook";
+import { formatDateShort } from "@/lib/shift/slots";
 import type { Action } from "@/lib/shift/state";
 import { createPerson } from "@/lib/shift/types";
 import type { ShiftProject } from "@/lib/shift/types";
@@ -32,6 +34,8 @@ const COLUMN_ROLE_LABELS: Record<ColumnRole, string> = {
 interface WideColumnDraft {
   columnIndex: number;
   enabled: boolean;
+  /** "YYYY-MM-DD" 形式。未解決なら空文字 */
+  date: string;
   start: string;
   end: string;
 }
@@ -47,14 +51,20 @@ interface ImportDraft {
   sheetName: string | null;
 }
 
-function buildWideColumns(grid: ParsedGrid, nameColumnIndex: number): WideColumnDraft[] {
+function buildWideColumns(
+  grid: ParsedGrid,
+  nameColumnIndex: number,
+  configuredDates: string[]
+): WideColumnDraft[] {
   const header = grid[0] ?? [];
   return header
     .map((h, columnIndex) => {
-      const parsed = parseTimeRangeToken(h);
+      const parsed = parseSingleDateTimeRange(h);
+      const date = parsed ? resolveDate(parsed.dateText, configuredDates) : "";
       return {
         columnIndex,
         enabled: parsed !== null,
+        date,
         start: parsed?.start ?? "",
         end: parsed?.end ?? "",
       };
@@ -65,7 +75,8 @@ function buildWideColumns(grid: ParsedGrid, nameColumnIndex: number): WideColumn
 function computeInitialDraft(
   grid: ParsedGrid,
   workbook: ParsedWorkbook | null,
-  sheetName: string | null
+  sheetName: string | null,
+  configuredDates: string[]
 ): ImportDraft {
   const hasHeaderRow = guessHasHeaderRow(grid);
   const format = detectFormat(grid, hasHeaderRow);
@@ -77,7 +88,7 @@ function computeInitialDraft(
       format,
       columnRoles: [],
       wideNameColumnIndex: nameColumnIndex,
-      wideColumns: buildWideColumns(grid, nameColumnIndex),
+      wideColumns: buildWideColumns(grid, nameColumnIndex, configuredDates),
       workbook,
       sheetName,
     };
@@ -95,14 +106,14 @@ function computeInitialDraft(
   };
 }
 
-function recomputeForFormat(draft: ImportDraft, format: ImportFormat): ImportDraft {
+function recomputeForFormat(draft: ImportDraft, format: ImportFormat, configuredDates: string[]): ImportDraft {
   if (format === "wide") {
     const { nameColumnIndex } = inferWideFormatColumns(draft.grid);
     return {
       ...draft,
       format,
       wideNameColumnIndex: nameColumnIndex,
-      wideColumns: buildWideColumns(draft.grid, nameColumnIndex),
+      wideColumns: buildWideColumns(draft.grid, nameColumnIndex, configuredDates),
     };
   }
   const { columnRoles } = inferLongFormatColumns(draft.grid, draft.hasHeaderRow);
@@ -120,6 +131,10 @@ export function ImportPanel({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastImportedCount, setLastImportedCount] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const configuredDates = useMemo(
+    () => Array.from(new Set(project.slots.map((s) => s.date))).sort(),
+    [project.slots]
+  );
 
   function loadGrid(grid: ParsedGrid, workbook: ParsedWorkbook | null, sheetName: string | null) {
     setLoadError(null);
@@ -129,7 +144,7 @@ export function ImportPanel({
       setDraft(null);
       return;
     }
-    setDraft(computeInitialDraft(grid, workbook, sheetName));
+    setDraft(computeInitialDraft(grid, workbook, sheetName, configuredDates));
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
@@ -174,8 +189,8 @@ export function ImportPanel({
       return buildPeopleFromLongFormat(draft.grid, draft.hasHeaderRow, draft.columnRoles, project.slots);
     }
     const timeColumns: WideTimeColumn[] = draft.wideColumns
-      .filter((c) => c.enabled && c.start !== "" && c.end !== "" && c.start < c.end)
-      .map((c) => ({ columnIndex: c.columnIndex, range: { start: c.start, end: c.end } }));
+      .filter((c) => c.enabled && c.date !== "" && c.start !== "" && c.end !== "" && c.start < c.end)
+      .map((c) => ({ columnIndex: c.columnIndex, range: { date: c.date, start: c.start, end: c.end } }));
     return buildPeopleFromWideFormat(draft.grid, draft.wideNameColumnIndex, timeColumns, project.slots);
   }, [draft, project.slots]);
 
@@ -209,6 +224,11 @@ export function ImportPanel({
 
   return (
     <div className="space-y-4">
+      {project.slots.length === 0 && (
+        <p className="text-xs text-amber-600">
+          先に「枠設定」タブで対象日と時間枠を作成しておくと、取り込んだ時刻レンジの日付を自動で判定できます。
+        </p>
+      )}
       {!draft && (
         <Section title="元データの入力">
           <div className="grid gap-4 md:grid-cols-2">
@@ -281,7 +301,7 @@ export function ImportPanel({
                   onChange={(e) => {
                     const hasHeaderRow = e.target.checked;
                     const format = detectFormat(draft.grid, hasHeaderRow);
-                    setDraft(recomputeForFormat({ ...draft, hasHeaderRow }, format));
+                    setDraft(recomputeForFormat({ ...draft, hasHeaderRow }, format, configuredDates));
                   }}
                 />
                 先頭行はヘッダー
@@ -290,7 +310,9 @@ export function ImportPanel({
                 <select
                   className={inputClass}
                   value={draft.format}
-                  onChange={(e) => setDraft(recomputeForFormat(draft, e.target.value as ImportFormat))}
+                  onChange={(e) =>
+                    setDraft(recomputeForFormat(draft, e.target.value as ImportFormat, configuredDates))
+                  }
                 >
                   <option value="long">ロング形式(1行=1人)</option>
                   <option value="wide">ワイド形式(列=時刻)</option>
@@ -344,7 +366,7 @@ export function ImportPanel({
                     setDraft({
                       ...draft,
                       wideNameColumnIndex,
-                      wideColumns: buildWideColumns(draft.grid, wideNameColumnIndex),
+                      wideColumns: buildWideColumns(draft.grid, wideNameColumnIndex, configuredDates),
                     });
                   }}
                 >
@@ -356,9 +378,11 @@ export function ImportPanel({
                 </select>
               </Field>
               <div className="mt-3 space-y-2">
-                <span className="text-xs font-medium text-slate-500">時刻列</span>
+                <span className="text-xs font-medium text-slate-500">
+                  時刻列(対象日は見出しから自動判定。必要に応じて修正してください)
+                </span>
                 {draft.wideColumns.map((c) => (
-                  <div key={c.columnIndex} className="flex items-center gap-2">
+                  <div key={c.columnIndex} className="flex flex-wrap items-center gap-2">
                     <label className="flex w-40 shrink-0 items-center gap-2 text-sm">
                       <input
                         type="checkbox"
@@ -372,6 +396,17 @@ export function ImportPanel({
                       />
                       {draft.grid[0][c.columnIndex] || `列${c.columnIndex + 1}`}
                     </label>
+                    <input
+                      type="date"
+                      className={inputClass}
+                      value={c.date}
+                      onChange={(e) => {
+                        const wideColumns = draft.wideColumns.map((wc) =>
+                          wc.columnIndex === c.columnIndex ? { ...wc, date: e.target.value } : wc
+                        );
+                        setDraft({ ...draft, wideColumns });
+                      }}
+                    />
                     <input
                       type="time"
                       className={inputClass}
@@ -489,7 +524,9 @@ function PeopleList({ project, dispatch }: { project: ShiftProject; dispatch: Di
                     <td className="py-1 pr-2">
                       {p.available.length === 0
                         ? "なし"
-                        : p.available.map((r) => `${r.start}〜${r.end}`).join(", ")}
+                        : p.available
+                            .map((r) => `${formatDateShort(r.date)} ${r.start}〜${r.end}`)
+                            .join(", ")}
                     </td>
                     <td className="py-1 pr-2">{p.maxSlots ?? `既定(${project.defaultMaxSlotsPerPerson})`}</td>
                     <td className="py-1 text-right">

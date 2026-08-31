@@ -1,5 +1,5 @@
 import { reducer, type Action } from "./state";
-import { createSlotPreset, defaultShiftProject, type ShiftProject, type SlotGenerationSettings } from "./types";
+import { createSlotPreset, defaultShiftProject, type DailyTemplate, type ShiftProject } from "./types";
 import type { ProjectsFile } from "./storage";
 
 export type AppState = ProjectsFile;
@@ -12,7 +12,7 @@ export type AppAction =
   | { type: "projects/import"; project: ShiftProject }
   | { type: "projects/replaceAll"; file: ProjectsFile }
   | { type: "project"; action: Action }
-  | { type: "presets/save"; name: string; slotGeneration: SlotGenerationSettings }
+  | { type: "presets/save"; name: string; template: DailyTemplate }
   | { type: "presets/remove"; id: string };
 
 export function defaultAppState(): AppState {
@@ -58,7 +58,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
     case "presets/save":
-      return { ...state, slotPresets: [...state.slotPresets, createSlotPreset(action.name, action.slotGeneration)] };
+      return { ...state, slotPresets: [...state.slotPresets, createSlotPreset(action.name, action.template)] };
     case "presets/remove":
       return { ...state, slotPresets: state.slotPresets.filter((p) => p.id !== action.id) };
   }

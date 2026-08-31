@@ -25,7 +25,7 @@ describe("IndexedDBAdapter", () => {
         {
           id: "preset1",
           name: "いつもの構成",
-          slotGeneration: { start: "09:00", end: "17:00", intervalMinutes: 20, breaks: [] },
+          template: { start: "09:00", end: "17:00", intervalMinutes: 20, breaks: [] },
         },
       ],
     });

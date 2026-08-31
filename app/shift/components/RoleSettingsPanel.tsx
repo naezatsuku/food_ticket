@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type Dispatch } from "react";
+import { Fragment, useState, type Dispatch } from "react";
 import { Button, ErrorList, Field, inputClass, NumberInput, Section } from "@/app/components/ui";
 import type { Action } from "@/lib/shift/state";
 import { checkSlotOverCapacity, requirementFor } from "@/lib/shift/roles";
+import { formatDateShort } from "@/lib/shift/slots";
 import type { Role, ShiftProject, TimeSlot } from "@/lib/shift/types";
 
 export function RoleSettingsPanel({
@@ -17,7 +18,7 @@ export function RoleSettingsPanel({
   const warnings = checkSlotOverCapacity(slots, roles);
   const warningMessages = warnings.map((w) => {
     const slot = slots.find((s) => s.id === w.slotId);
-    const label = slot ? `${slot.start}〜${slot.end}` : w.slotId;
+    const label = slot ? `${formatDateShort(slot.date)} ${slot.start}〜${slot.end}` : w.slotId;
     return `枠 ${label}: 役割の最低人数の合計(${w.totalMin}人)が枠の定員(${w.capacity}人)を超えています。`;
   });
 
@@ -87,6 +88,12 @@ function RoleRequirementSection({
 }) {
   const [bulkMin, setBulkMin] = useState(0);
   const [bulkMax, setBulkMax] = useState(1);
+  const dates = Array.from(new Set(slots.map((s) => s.date))).sort();
+  const [bulkDate, setBulkDate] = useState(""); // "" = すべての日付
+
+  const sortedSlots = [...slots].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start)
+  );
 
   return (
     <Section title={`枠ごとの必要人数 — ${role.name || "無題の役割"}`} defaultOpen={false}>
@@ -97,12 +104,30 @@ function RoleRequirementSection({
         <Field label="一括設定: 上限人数">
           <NumberInput value={bulkMax} min={0} onChange={(n) => setBulkMax(Math.max(0, Math.trunc(n)))} />
         </Field>
+        {dates.length > 1 && (
+          <Field label="対象日">
+            <select className={inputClass} value={bulkDate} onChange={(e) => setBulkDate(e.target.value)}>
+              <option value="">すべての日付</option>
+              {dates.map((d) => (
+                <option key={d} value={d}>
+                  {formatDateShort(d)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Button
           onClick={() =>
-            dispatch({ type: "requirement/bulkApply", roleId: role.id, min: bulkMin, max: bulkMax })
+            dispatch({
+              type: "requirement/bulkApply",
+              roleId: role.id,
+              min: bulkMin,
+              max: bulkMax,
+              dateFilter: bulkDate || undefined,
+            })
           }
         >
-          全枠に適用
+          {bulkDate ? `${formatDateShort(bulkDate)}に適用` : "全枠に適用"}
         </Button>
       </div>
 
@@ -116,42 +141,52 @@ function RoleRequirementSection({
             </tr>
           </thead>
           <tbody>
-            {slots.map((slot) => {
+            {sortedSlots.map((slot, i) => {
               const req = requirementFor(role, slot.id);
+              const isNewDate = i === 0 || sortedSlots[i - 1].date !== slot.date;
               return (
-                <tr key={slot.id} className="border-b border-slate-100">
-                  <td className="py-1 pr-2 whitespace-nowrap">
-                    {slot.start}〜{slot.end}
-                  </td>
-                  <td className="py-1 pr-2">
-                    <NumberInput
-                      value={req.min}
-                      min={0}
-                      onChange={(n) =>
-                        dispatch({
-                          type: "requirement/set",
-                          roleId: role.id,
-                          slotId: slot.id,
-                          patch: { min: Math.max(0, Math.trunc(n)) },
-                        })
-                      }
-                    />
-                  </td>
-                  <td className="py-1">
-                    <NumberInput
-                      value={req.max}
-                      min={0}
-                      onChange={(n) =>
-                        dispatch({
-                          type: "requirement/set",
-                          roleId: role.id,
-                          slotId: slot.id,
-                          patch: { max: Math.max(0, Math.trunc(n)) },
-                        })
-                      }
-                    />
-                  </td>
-                </tr>
+                <Fragment key={slot.id}>
+                  {isNewDate && (
+                    <tr key={`date-${slot.date}`}>
+                      <td colSpan={3} className="bg-slate-50 py-1 pr-2 text-[11px] font-semibold text-slate-500">
+                        {slot.date ? formatDateShort(slot.date) : "(日付未設定)"}
+                      </td>
+                    </tr>
+                  )}
+                  <tr className="border-b border-slate-100">
+                    <td className="py-1 pr-2 whitespace-nowrap">
+                      {slot.start}〜{slot.end}
+                    </td>
+                    <td className="py-1 pr-2">
+                      <NumberInput
+                        value={req.min}
+                        min={0}
+                        onChange={(n) =>
+                          dispatch({
+                            type: "requirement/set",
+                            roleId: role.id,
+                            slotId: slot.id,
+                            patch: { min: Math.max(0, Math.trunc(n)) },
+                          })
+                        }
+                      />
+                    </td>
+                    <td className="py-1">
+                      <NumberInput
+                        value={req.max}
+                        min={0}
+                        onChange={(n) =>
+                          dispatch({
+                            type: "requirement/set",
+                            roleId: role.id,
+                            slotId: slot.id,
+                            patch: { max: Math.max(0, Math.trunc(n)) },
+                          })
+                        }
+                      />
+                    </td>
+                  </tr>
+                </Fragment>
               );
             })}
           </tbody>

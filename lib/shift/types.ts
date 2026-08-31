@@ -1,6 +1,8 @@
 /** 1つの時間枠(コマ) */
 export interface TimeSlot {
   id: string;
+  /** "2026-09-13" 形式(日付を跨ぐイベントに対応するため枠ごとに日付を持つ) */
+  date: string;
   /** "10:00" 形式 */
   start: string;
   /** "10:20" 形式 */
@@ -15,8 +17,8 @@ export interface BreakPeriod {
   end: string;
 }
 
-/** 時間枠の一括生成設定 */
-export interface SlotGenerationSettings {
+/** 1日分の枠生成テンプレート(開始〜終了・コマ長・休憩)。日付は持たず使い回せる */
+export interface DailyTemplate {
   start: string;
   end: string;
   /** 1コマの長さ(分) */
@@ -24,11 +26,20 @@ export interface SlotGenerationSettings {
   breaks: BreakPeriod[];
 }
 
-/** 毎回使い回す枠構成のプリセット(プロジェクトを跨いで再利用する) */
+/**
+ * 時間枠の一括生成設定。1回の「生成」は対象日1日分を作る/置き換える操作で、
+ * 別の日付に変えて再度生成すればその日の枠が追加される(複数日対応)。
+ */
+export interface SlotGenerationSettings extends DailyTemplate {
+  /** 生成対象の日付("2026-09-13" 形式)。空文字は未設定 */
+  date: string;
+}
+
+/** 毎回使い回す枠構成のプリセット(プロジェクトを跨いで再利用する)。日付は含まない */
 export interface SlotPreset {
   id: string;
   name: string;
-  slotGeneration: SlotGenerationSettings;
+  template: DailyTemplate;
 }
 
 /** 役割ごと・枠ごとの必要人数 */
@@ -51,6 +62,8 @@ export interface Role {
 
 /** メンバーが入れる時間帯 */
 export interface AvailabilityRange {
+  /** "2026-09-13" 形式 */
+  date: string;
   start: string;
   end: string;
 }
@@ -124,6 +137,7 @@ export function createRole(partial: Partial<Role> | undefined, existingCount: nu
 export function createTimeSlot(partial?: Partial<TimeSlot>): TimeSlot {
   return {
     id: crypto.randomUUID(),
+    date: "",
     start: "09:00",
     end: "09:20",
     capacity: 1,
@@ -142,8 +156,8 @@ export function createPerson(partial?: Partial<Person>): Person {
   };
 }
 
-export function createSlotPreset(name: string, slotGeneration: SlotGenerationSettings): SlotPreset {
-  return { id: crypto.randomUUID(), name, slotGeneration };
+export function createSlotPreset(name: string, template: DailyTemplate): SlotPreset {
+  return { id: crypto.randomUUID(), name, template };
 }
 
 export function defaultShiftProject(): ShiftProject {
@@ -151,6 +165,7 @@ export function defaultShiftProject(): ShiftProject {
     id: "default",
     name: "",
     slotGeneration: {
+      date: "",
       start: "09:00",
       end: "17:00",
       intervalMinutes: 20,

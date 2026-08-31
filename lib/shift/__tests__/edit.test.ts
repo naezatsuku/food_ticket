@@ -34,20 +34,20 @@ describe("checkDropViolations", () => {
   const role = createRole({ id: "r1", requirement: [{ slotId: "s1", min: 0, max: 1 }] }, 0);
 
   it("希望時間帯内・定員内なら違反なし", () => {
-    const person = createPerson({ id: "p1", available: [{ start: "09:00", end: "09:20" }] });
+    const person = createPerson({ id: "p1", available: [{ date: "", start: "09:00", end: "09:20" }] });
     const proj = project({ slots: [slot], roles: [role], people: [person] });
     expect(checkDropViolations(proj, "p1", { slotId: "s1", roleId: "r1" })).toEqual([]);
   });
 
   it("希望時間帯外なら unavailable 違反", () => {
-    const person = createPerson({ id: "p1", available: [{ start: "10:00", end: "10:20" }] });
+    const person = createPerson({ id: "p1", available: [{ date: "", start: "10:00", end: "10:20" }] });
     const proj = project({ slots: [slot], roles: [role], people: [person] });
     const violations = checkDropViolations(proj, "p1", { slotId: "s1", roleId: "r1" });
     expect(violations.map((v) => v.kind)).toEqual(["unavailable"]);
   });
 
   it("既に定員に達しているなら overCapacity 違反", () => {
-    const person = createPerson({ id: "p2", available: [{ start: "09:00", end: "09:20" }] });
+    const person = createPerson({ id: "p2", available: [{ date: "", start: "09:00", end: "09:20" }] });
     const proj = project({
       slots: [slot],
       roles: [role],
@@ -59,7 +59,7 @@ describe("checkDropViolations", () => {
   });
 
   it("既に自分がそのセルにいる場合は overCapacity にならない(セル内入れ替え等)", () => {
-    const person = createPerson({ id: "p1", available: [{ start: "09:00", end: "09:20" }] });
+    const person = createPerson({ id: "p1", available: [{ date: "", start: "09:00", end: "09:20" }] });
     const proj = project({
       slots: [slot],
       roles: [role],
@@ -73,13 +73,22 @@ describe("checkDropViolations", () => {
 describe("personAvailableAtSlot", () => {
   it("入れる時間帯なら true", () => {
     const slot = createTimeSlot({ id: "s1", start: "09:00", end: "09:20" });
-    const person = createPerson({ id: "p1", available: [{ start: "09:00", end: "09:20" }] });
+    const person = createPerson({ id: "p1", available: [{ date: "", start: "09:00", end: "09:20" }] });
     const proj = project({ slots: [slot], people: [person] });
     expect(personAvailableAtSlot(proj, "p1", "s1")).toBe(true);
   });
   it("入れない時間帯なら false", () => {
     const slot = createTimeSlot({ id: "s1", start: "09:00", end: "09:20" });
     const person = createPerson({ id: "p1", available: [] });
+    const proj = project({ slots: [slot], people: [person] });
+    expect(personAvailableAtSlot(proj, "p1", "s1")).toBe(false);
+  });
+  it("時刻が一致していても日付が違えば false(日付跨ぎ対応)", () => {
+    const slot = createTimeSlot({ id: "s1", date: "2026-09-13", start: "09:00", end: "09:20" });
+    const person = createPerson({
+      id: "p1",
+      available: [{ date: "2026-09-14", start: "09:00", end: "09:20" }],
+    });
     const proj = project({ slots: [slot], people: [person] });
     expect(personAvailableAtSlot(proj, "p1", "s1")).toBe(false);
   });

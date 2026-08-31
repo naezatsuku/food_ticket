@@ -4,6 +4,7 @@ import { useMemo, useState, type Dispatch } from "react";
 import { Button, Section } from "@/app/components/ui";
 import { buildScheduleResult, runAssignment } from "@/lib/shift/assign/engine";
 import type { Action } from "@/lib/shift/state";
+import { formatDateShort } from "@/lib/shift/slots";
 import type { ShiftProject } from "@/lib/shift/types";
 
 export function AssignPanel({
@@ -90,9 +91,12 @@ export function AssignPanel({
                 {result.understaffedSlots.map((u, i) => {
                   const slot = slotById.get(u.slotId);
                   const role = roleById.get(u.roleId);
+                  const slotLabel = slot
+                    ? `${formatDateShort(slot.date)} ${slot.start}〜${slot.end}`
+                    : u.slotId;
                   return (
                     <li key={i} className="text-red-600">
-                      {slot ? `${slot.start}〜${slot.end}` : u.slotId} ・ {role?.name ?? u.roleId}:
+                      {slotLabel} ・ {role?.name ?? u.roleId}:
                       あと{u.shortage}人不足
                     </li>
                   );

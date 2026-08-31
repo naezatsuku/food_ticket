@@ -100,7 +100,16 @@ function ProjectWizard({
           dispatch={projectDispatch}
           presets={slotPresets}
           onSavePreset={(name) =>
-            dispatch({ type: "presets/save", name, slotGeneration: project.slotGeneration })
+            dispatch({
+              type: "presets/save",
+              name,
+              template: {
+                start: project.slotGeneration.start,
+                end: project.slotGeneration.end,
+                intervalMinutes: project.slotGeneration.intervalMinutes,
+                breaks: project.slotGeneration.breaks,
+              },
+            })
           }
           onDeletePreset={(id) => dispatch({ type: "presets/remove", id })}
         />

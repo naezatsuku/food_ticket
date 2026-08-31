@@ -22,11 +22,12 @@ export type Action =
   | { type: "slot/add" }
   | { type: "slot/update"; id: string; patch: Partial<TimeSlot> }
   | { type: "slot/remove"; id: string }
+  | { type: "slot/removeByDate"; date: string }
   | { type: "role/add" }
   | { type: "role/update"; id: string; patch: Partial<Pick<Role, "name" | "colorHex">> }
   | { type: "role/remove"; id: string }
   | { type: "requirement/set"; roleId: string; slotId: string; patch: { min?: number; max?: number } }
-  | { type: "requirement/bulkApply"; roleId: string; min: number; max: number }
+  | { type: "requirement/bulkApply"; roleId: string; min: number; max: number; dateFilter?: string }
   | { type: "people/replace"; people: Person[] }
   | { type: "people/update"; id: string; patch: Partial<Person> }
   | { type: "people/remove"; id: string }
@@ -104,16 +105,29 @@ export function reducer(state: ShiftProject, action: Action): ShiftProject {
         },
       };
     case "slotGeneration/apply": {
-      const slots = generateSlots(state.slotGeneration);
-      const roles = pruneRequirements(state.roles, new Set(slots.map((s) => s.id)));
-      return { ...state, slots, roles };
+      // 「生成」は対象日1日分だけを作り直す操作。他の日付の枠はそのまま残す(複数日対応)。
+      const newSlotsForDate = generateSlots(state.slotGeneration);
+      const keptSlots = state.slots.filter((s) => s.date !== state.slotGeneration.date);
+      const slots = [...keptSlots, ...newSlotsForDate].sort(
+        (a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start)
+      );
+      const validSlotIds = new Set(slots.map((s) => s.id));
+      const roles = pruneRequirements(state.roles, validSlotIds);
+      const assignments = pruneAssignments(
+        state.assignments,
+        validSlotIds,
+        new Set(roles.map((r) => r.id)),
+        new Set(state.people.map((p) => p.id))
+      );
+      return { ...state, slots, roles, assignments };
     }
 
     case "slot/add": {
       const last = state.slots[state.slots.length - 1];
+      const date = state.slotGeneration.date || last?.date || "";
       const slot = last
-        ? createTimeSlot({ start: last.end, end: last.end })
-        : createTimeSlot();
+        ? createTimeSlot({ date, start: last.end, end: last.end })
+        : createTimeSlot({ date });
       return { ...state, slots: [...state.slots, slot] };
     }
     case "slot/update":
@@ -123,6 +137,18 @@ export function reducer(state: ShiftProject, action: Action): ShiftProject {
       };
     case "slot/remove": {
       const slots = state.slots.filter((s) => s.id !== action.id);
+      const validSlotIds = new Set(slots.map((s) => s.id));
+      const roles = pruneRequirements(state.roles, validSlotIds);
+      const assignments = pruneAssignments(
+        state.assignments,
+        validSlotIds,
+        new Set(roles.map((r) => r.id)),
+        new Set(state.people.map((p) => p.id))
+      );
+      return { ...state, slots, roles, assignments };
+    }
+    case "slot/removeByDate": {
+      const slots = state.slots.filter((s) => s.date !== action.date);
       const validSlotIds = new Set(slots.map((s) => s.id));
       const roles = pruneRequirements(state.roles, validSlotIds);
       const assignments = pruneAssignments(
@@ -159,17 +185,21 @@ export function reducer(state: ShiftProject, action: Action): ShiftProject {
           r.id === action.roleId ? setRequirement(r, action.slotId, action.patch) : r
         ),
       };
-    case "requirement/bulkApply":
+    case "requirement/bulkApply": {
+      const targetSlots = action.dateFilter
+        ? state.slots.filter((s) => s.date === action.dateFilter)
+        : state.slots;
       return {
         ...state,
         roles: state.roles.map((r) => {
           if (r.id !== action.roleId) return r;
-          return state.slots.reduce(
+          return targetSlots.reduce(
             (role, slot) => setRequirement(role, slot.id, { min: action.min, max: action.max }),
             r
           );
         }),
       };
+    }
 
     case "people/replace": {
       const validPersonIds = new Set(action.people.map((p) => p.id));

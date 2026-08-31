@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type Dispatch } from "react";
+import { Fragment, useEffect, useRef, useState, type Dispatch } from "react";
 import { Button, Section } from "@/app/components/ui";
 import { cellOccupants, checkDropViolations, personAvailableAtSlot, unassignedPeople } from "@/lib/shift/edit";
 import { requirementFor } from "@/lib/shift/roles";
+import { formatDateShort } from "@/lib/shift/slots";
 import type { Action, AssignmentKey } from "@/lib/shift/state";
 import type { Assignment, Person, ShiftProject } from "@/lib/shift/types";
 
@@ -191,7 +192,9 @@ export function EditPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drag]);
 
-  const slots = [...project.slots].sort((a, b) => a.start.localeCompare(b.start));
+  const slots = [...project.slots].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start)
+  );
   const pool = unassignedPeople(project);
   const personById = new Map(project.people.map((p) => [p.id, p]));
 
@@ -235,12 +238,23 @@ export function EditPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {slots.map((slot) => (
-                    <tr key={slot.id}>
-                      <th className="whitespace-nowrap py-1 pr-2 text-right font-normal text-slate-500">
-                        {slot.start}〜{slot.end}
-                      </th>
-                      {project.roles.map((role) => {
+                  {slots.map((slot, i) => (
+                    <Fragment key={slot.id}>
+                      {(i === 0 || slots[i - 1].date !== slot.date) && (
+                        <tr>
+                          <td
+                            colSpan={project.roles.length + 1}
+                            className="bg-slate-100 px-1 py-1 text-xs font-semibold text-slate-600"
+                          >
+                            {slot.date ? formatDateShort(slot.date) : "(日付未設定)"}
+                          </td>
+                        </tr>
+                      )}
+                      <tr>
+                        <th className="whitespace-nowrap py-1 pr-2 text-right font-normal text-slate-500">
+                          {slot.start}〜{slot.end}
+                        </th>
+                        {project.roles.map((role) => {
                         const occupants = cellOccupants(project.assignments, {
                           slotId: slot.id,
                           roleId: role.id,
@@ -297,8 +311,9 @@ export function EditPanel({
                             </p>
                           </td>
                         );
-                      })}
-                    </tr>
+                        })}
+                      </tr>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -358,7 +373,7 @@ function DragPersonDetail({ project, personId }: { project: ShiftProject; person
         入れる時間帯:{" "}
         {person.available.length === 0
           ? "なし"
-          : person.available.map((r) => `${r.start}〜${r.end}`).join(", ")}
+          : person.available.map((r) => `${formatDateShort(r.date)} ${r.start}〜${r.end}`).join(", ")}
       </p>
     </div>
   );

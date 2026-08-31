@@ -3,6 +3,8 @@ import type { ShiftProject } from "../types";
 export interface CanvasExportOptions {
   title: string;
   subtitle?: string;
+  /** 出力対象の日付("YYYY-MM-DD")。日付を跨ぐプロジェクトでは1日ずつ出力する */
+  date: string;
   /** devicePixelRatio 相当の倍率(2〜3を推奨) */
   scale?: number;
   background: "white" | "transparent";
@@ -22,10 +24,10 @@ const LEGEND_ITEMS_PER_ROW_ESTIMATE = 3;
 /** キャンバスの表示サイズ(CSSピクセル、devicePixelRatio適用前)を計算する */
 export function computeCanvasSize(
   project: ShiftProject,
-  options: Pick<CanvasExportOptions, "subtitle">
+  options: Pick<CanvasExportOptions, "subtitle" | "date">
 ): { width: number; height: number } {
   const roleCount = Math.max(1, project.roles.length);
-  const slotCount = Math.max(1, project.slots.length);
+  const slotCount = Math.max(1, project.slots.filter((s) => s.date === options.date).length);
   const legendRows = Math.max(1, Math.ceil(project.roles.length / LEGEND_ITEMS_PER_ROW_ESTIMATE));
 
   const width = PADDING * 2 + TIME_COL_WIDTH + roleCount * ROLE_COL_WIDTH;
@@ -68,7 +70,9 @@ export function renderScheduleToCanvas(
   }
 
   const personById = new Map(project.people.map((p) => [p.id, p]));
-  const slots = [...project.slots].sort((a, b) => a.start.localeCompare(b.start));
+  const slots = project.slots
+    .filter((s) => s.date === options.date)
+    .sort((a, b) => a.start.localeCompare(b.start));
 
   ctx.textBaseline = "top";
 

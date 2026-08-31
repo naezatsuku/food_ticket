@@ -11,7 +11,7 @@ describe("runAssignment", () => {
   it("希望通りに入れる1人1枠を割り当てる", () => {
     const slot = createTimeSlot({ id: "s1", start: "09:00", end: "09:20", capacity: 1 });
     const role = createRole({ id: "r1", name: "レジ", requirement: [{ slotId: "s1", min: 1, max: 1 }] }, 0);
-    const person = createPerson({ id: "p1", name: "太郎", available: [{ start: "09:00", end: "09:20" }] });
+    const person = createPerson({ id: "p1", name: "太郎", available: [{ date: "", start: "09:00", end: "09:20" }] });
     const result = runAssignment(
       project({ slots: [slot], roles: [role], people: [person], defaultMaxSlotsPerPerson: 8 })
     );
@@ -23,7 +23,7 @@ describe("runAssignment", () => {
   it("入れる時間帯に一致する枠が無ければ未割当になり理由が付く", () => {
     const slot = createTimeSlot({ id: "s1", start: "09:00", end: "09:20", capacity: 1 });
     const role = createRole({ id: "r1", requirement: [{ slotId: "s1", min: 0, max: 1 }] }, 0);
-    const person = createPerson({ id: "p1", available: [{ start: "10:00", end: "10:20" }] });
+    const person = createPerson({ id: "p1", available: [{ date: "", start: "10:00", end: "10:20" }] });
     const result = runAssignment(project({ slots: [slot], roles: [role], people: [person] }));
     expect(result.unassignedPeople).toEqual([
       { personId: "p1", reason: "入れる時間帯に一致する枠がありません。" },
@@ -41,7 +41,7 @@ describe("runAssignment", () => {
   it("最低人数を満たせない枠は understaffedSlots に出る", () => {
     const slot = createTimeSlot({ id: "s1", start: "09:00", end: "09:20", capacity: 2 });
     const role = createRole({ id: "r1", requirement: [{ slotId: "s1", min: 2, max: 2 }] }, 0);
-    const person = createPerson({ id: "p1", available: [{ start: "09:00", end: "09:20" }] });
+    const person = createPerson({ id: "p1", available: [{ date: "", start: "09:00", end: "09:20" }] });
     const result = runAssignment(project({ slots: [slot], roles: [role], people: [person] }));
     expect(result.understaffedSlots).toEqual([{ slotId: "s1", roleId: "r1", shortage: 1 }]);
   });
@@ -58,7 +58,7 @@ describe("runAssignment", () => {
     const person = createPerson({
       id: "p1",
       maxSlots: 1,
-      available: [{ start: "09:00", end: "09:40" }],
+      available: [{ date: "", start: "09:00", end: "09:40" }],
     });
     const result = runAssignment(project({ slots, roles: [role], people: [person] }));
     expect(result.assignments).toHaveLength(1);
@@ -68,7 +68,7 @@ describe("runAssignment", () => {
     const slot = createTimeSlot({ id: "s1", start: "09:00", end: "09:20", capacity: 2 });
     const roleA = createRole({ id: "rA", requirement: [{ slotId: "s1", min: 0, max: 1 }] }, 0);
     const roleB = createRole({ id: "rB", requirement: [{ slotId: "s1", min: 0, max: 1 }] }, 1);
-    const person = createPerson({ id: "p1", maxSlots: 5, available: [{ start: "09:00", end: "09:20" }] });
+    const person = createPerson({ id: "p1", maxSlots: 5, available: [{ date: "", start: "09:00", end: "09:20" }] });
     const result = runAssignment(
       project({ slots: [slot], roles: [roleA, roleB], people: [person] })
     );
@@ -85,8 +85,8 @@ describe("runAssignment", () => {
       0
     );
     const people = [
-      createPerson({ id: "p1", maxSlots: 4, available: [{ start: "09:00", end: "13:00" }] }),
-      createPerson({ id: "p2", maxSlots: 4, available: [{ start: "09:00", end: "13:00" }] }),
+      createPerson({ id: "p1", maxSlots: 4, available: [{ date: "", start: "09:00", end: "13:00" }] }),
+      createPerson({ id: "p2", maxSlots: 4, available: [{ date: "", start: "09:00", end: "13:00" }] }),
     ];
     const result = runAssignment(project({ slots, roles: [role], people }));
     const counts = result.fairness.map((f) => f.assignedCount).sort();
@@ -100,7 +100,7 @@ describe("runAssignment", () => {
     const person = createPerson({
       id: "p1",
       maxSlots: 1,
-      available: [{ start: "09:00", end: "09:20" }],
+      available: [{ date: "", start: "09:00", end: "09:20" }],
       rolePreference: { rA: 5, rB: 0 },
     });
     const result = runAssignment(project({ slots: [slot], roles: [roleA, roleB], people: [person] }));
@@ -117,8 +117,8 @@ describe("runAssignment", () => {
       0
     );
     const people = [
-      createPerson({ id: "p1", maxSlots: 2, available: [{ start: "09:00", end: "09:40" }] }),
-      createPerson({ id: "p2", maxSlots: 2, available: [{ start: "09:00", end: "09:40" }] }),
+      createPerson({ id: "p1", maxSlots: 2, available: [{ date: "", start: "09:00", end: "09:40" }] }),
+      createPerson({ id: "p2", maxSlots: 2, available: [{ date: "", start: "09:00", end: "09:40" }] }),
     ];
     const proj = project({
       slots,
