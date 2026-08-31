@@ -1,24 +1,83 @@
 "use client";
 
-import type { Dispatch } from "react";
+import { useState, type Dispatch } from "react";
 import { Button, ErrorList, Field, inputClass, NumberInput, Section } from "@/app/components/ui";
 import type { Action } from "@/lib/shift/state";
 import { generateSlots, validateSlotGeneration } from "@/lib/shift/slots";
-import type { ShiftProject } from "@/lib/shift/types";
+import type { ShiftProject, SlotPreset } from "@/lib/shift/types";
 
 export function SlotSettingsPanel({
   project,
   dispatch,
+  presets,
+  onSavePreset,
+  onDeletePreset,
 }: {
   project: ShiftProject;
   dispatch: Dispatch<Action>;
+  presets: SlotPreset[];
+  onSavePreset: (name: string) => void;
+  onDeletePreset: (id: string) => void;
 }) {
   const { slotGeneration, slots } = project;
   const errors = validateSlotGeneration(slotGeneration);
   const preview = errors.length === 0 ? generateSlots(slotGeneration) : [];
+  const [presetName, setPresetName] = useState("");
 
   return (
     <div className="space-y-4">
+      <Section title="プリセット(枠構成の使い回し)" defaultOpen={presets.length > 0}>
+        {presets.length === 0 ? (
+          <p className="text-xs text-slate-400">
+            まだプリセットはありません。下で今の枠設定を保存すると、次回以降に呼び出せます。
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {presets.map((preset) => (
+              <li key={preset.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-slate-700">
+                  {preset.name || "(名称未設定)"}
+                  <span className="ml-2 text-xs text-slate-400">
+                    {preset.slotGeneration.start}〜{preset.slotGeneration.end} /{" "}
+                    {preset.slotGeneration.intervalMinutes}分
+                  </span>
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() =>
+                      dispatch({ type: "slotGeneration/set", patch: preset.slotGeneration })
+                    }
+                  >
+                    適用
+                  </Button>
+                  <Button variant="danger" onClick={() => onDeletePreset(preset.id)}>
+                    削除
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            className={inputClass}
+            placeholder="プリセット名(例: いつもの構成)"
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+          />
+          <Button
+            onClick={() => {
+              if (presetName.trim() === "") return;
+              onSavePreset(presetName.trim());
+              setPresetName("");
+            }}
+          >
+            現在の設定を保存
+          </Button>
+        </div>
+      </Section>
+
       <Section title="時間枠の一括生成">
         <div className="grid grid-cols-3 gap-3">
           <Field label="開始時刻">

@@ -4,6 +4,7 @@ import type {
   Role,
   RoleRequirement,
   ShiftProject,
+  SlotPreset,
   TimeSlot,
 } from "./types";
 import { defaultShiftProject } from "./types";
@@ -12,14 +13,15 @@ const STORAGE_KEY = "food-ticket-shift-projects-v1";
 /** Phase 1〜2 で使っていた単一プロジェクト用の旧キー(移行のためだけに残す) */
 const LEGACY_SINGLE_PROJECT_KEY = "food-ticket-shift-v1";
 
-/** 保存対象1件分: プロジェクト一覧と、最後に開いていたプロジェクト */
+/** 保存対象1件分: プロジェクト一覧・最後に開いていたプロジェクト・枠構成のプリセット */
 export interface ProjectsFile {
   projects: ShiftProject[];
   activeProjectId: string | null;
+  slotPresets: SlotPreset[];
 }
 
 function defaultProjectsFile(): ProjectsFile {
-  return { projects: [], activeProjectId: null };
+  return { projects: [], activeProjectId: null, slotPresets: [] };
 }
 
 /**
@@ -144,6 +146,35 @@ function normalizeProject(raw: unknown): ShiftProject {
   };
 }
 
+function normalizeSlotPresets(raw: unknown): SlotPreset[] {
+  if (!Array.isArray(raw)) return [];
+  const d = defaultShiftProject();
+  return raw
+    .filter((p): p is Record<string, unknown> => typeof p === "object" && p !== null)
+    .map((p) => {
+      const g = p.slotGeneration as Partial<ShiftProject["slotGeneration"]> | undefined;
+      return {
+        id: typeof p.id === "string" && p.id !== "" ? p.id : crypto.randomUUID(),
+        name: typeof p.name === "string" ? p.name : "",
+        slotGeneration: {
+          start: typeof g?.start === "string" ? g.start : d.slotGeneration.start,
+          end: typeof g?.end === "string" ? g.end : d.slotGeneration.end,
+          intervalMinutes:
+            typeof g?.intervalMinutes === "number" ? g.intervalMinutes : d.slotGeneration.intervalMinutes,
+          breaks: Array.isArray(g?.breaks)
+            ? g.breaks.filter(
+                (b): b is { start: string; end: string } =>
+                  typeof b === "object" &&
+                  b !== null &&
+                  typeof (b as { start?: unknown }).start === "string" &&
+                  typeof (b as { end?: unknown }).end === "string"
+              )
+            : d.slotGeneration.breaks,
+        },
+      };
+    });
+}
+
 /** 不明な形の入力をデフォルト値にマージして ProjectsFile に正規化する */
 function normalizeProjectsFile(raw: unknown): ProjectsFile {
   if (typeof raw !== "object" || raw === null) {
@@ -155,7 +186,7 @@ function normalizeProjectsFile(raw: unknown): ProjectsFile {
     typeof r.activeProjectId === "string" && projects.some((p) => p.id === r.activeProjectId)
       ? r.activeProjectId
       : null;
-  return { projects, activeProjectId };
+  return { projects, activeProjectId, slotPresets: normalizeSlotPresets(r.slotPresets) };
 }
 
 export class LocalStorageAdapter implements StorageAdapter {
@@ -181,7 +212,7 @@ export class LocalStorageAdapter implements StorageAdapter {
         project.roles.length === 0 &&
         project.people.length === 0;
       if (isEmpty) return defaultProjectsFile();
-      const file: ProjectsFile = { projects: [project], activeProjectId: project.id };
+      const file: ProjectsFile = { projects: [project], activeProjectId: project.id, slotPresets: [] };
       await this.save(file);
       localStorage.removeItem(LEGACY_SINGLE_PROJECT_KEY);
       return file;
@@ -195,6 +226,82 @@ export class LocalStorageAdapter implements StorageAdapter {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(file));
     } catch {
       // 容量超過時は自動保存をあきらめる(エクスポート/インポートは引き続き使える)
+    }
+  }
+}
+
+const IDB_NAME = "food-ticket-shift";
+const IDB_VERSION = 1;
+const IDB_STORE = "projectsFile";
+const IDB_RECORD_KEY = "current";
+
+function openIndexedDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(IDB_STORE)) {
+        req.result.createObjectStore(IDB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * IndexedDB を使った永続化。複数プロジェクトの保存に耐えられるよう、
+ * localStorage(Phase 1〜2)からこちらへ一度だけ移行する。
+ * IndexedDB が使えない環境(一部のプライベートブラウジング等)では
+ * localStorage にフォールバックする。
+ */
+export class IndexedDBAdapter implements StorageAdapter {
+  private readonly fallback = new LocalStorageAdapter();
+
+  private isAvailable(): boolean {
+    return typeof indexedDB !== "undefined";
+  }
+
+  async load(): Promise<ProjectsFile> {
+    if (!this.isAvailable()) return this.fallback.load();
+    try {
+      const db = await openIndexedDb();
+      const raw = await new Promise<unknown>((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, "readonly");
+        const req = tx.objectStore(IDB_STORE).get(IDB_RECORD_KEY);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      db.close();
+      if (raw !== undefined) return normalizeProjectsFile(raw);
+    } catch {
+      return this.fallback.load();
+    }
+    return this.migrateFromLocalStorage();
+  }
+
+  /** localStorage(旧バージョン、または旧旧の単一プロジェクト形式)からの一度きりの移行 */
+  private async migrateFromLocalStorage(): Promise<ProjectsFile> {
+    const file = await this.fallback.load();
+    const isEmpty = file.projects.length === 0 && file.slotPresets.length === 0;
+    if (isEmpty) return defaultProjectsFile();
+    await this.save(file);
+    localStorage.removeItem(STORAGE_KEY);
+    return file;
+  }
+
+  async save(file: ProjectsFile): Promise<void> {
+    if (!this.isAvailable()) return this.fallback.save(file);
+    try {
+      const db = await openIndexedDb();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(JSON.parse(JSON.stringify(file)), IDB_RECORD_KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    } catch {
+      // IndexedDB利用不可時は自動保存をあきらめる(エクスポート/インポートは引き続き使える)
     }
   }
 }

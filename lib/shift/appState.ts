@@ -1,5 +1,5 @@
 import { reducer, type Action } from "./state";
-import { defaultShiftProject, type ShiftProject } from "./types";
+import { createSlotPreset, defaultShiftProject, type ShiftProject, type SlotGenerationSettings } from "./types";
 import type { ProjectsFile } from "./storage";
 
 export type AppState = ProjectsFile;
@@ -11,17 +11,19 @@ export type AppAction =
   | { type: "projects/select"; id: string | null }
   | { type: "projects/import"; project: ShiftProject }
   | { type: "projects/replaceAll"; file: ProjectsFile }
-  | { type: "project"; action: Action };
+  | { type: "project"; action: Action }
+  | { type: "presets/save"; name: string; slotGeneration: SlotGenerationSettings }
+  | { type: "presets/remove"; id: string };
 
 export function defaultAppState(): AppState {
-  return { projects: [], activeProjectId: null };
+  return { projects: [], activeProjectId: null, slotPresets: [] };
 }
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "projects/create": {
       const project = { ...defaultShiftProject(), id: crypto.randomUUID() };
-      return { projects: [...state.projects, project], activeProjectId: project.id };
+      return { ...state, projects: [...state.projects, project], activeProjectId: project.id };
     }
     case "projects/duplicate": {
       const src = state.projects.find((p) => p.id === action.id);
@@ -30,18 +32,18 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const idx = state.projects.indexOf(src);
       const projects = [...state.projects];
       projects.splice(idx + 1, 0, copy);
-      return { projects, activeProjectId: copy.id };
+      return { ...state, projects, activeProjectId: copy.id };
     }
     case "projects/delete": {
       const projects = state.projects.filter((p) => p.id !== action.id);
       const activeProjectId = state.activeProjectId === action.id ? null : state.activeProjectId;
-      return { projects, activeProjectId };
+      return { ...state, projects, activeProjectId };
     }
     case "projects/select":
       return { ...state, activeProjectId: action.id };
     case "projects/import": {
       const project = { ...action.project, id: crypto.randomUUID() };
-      return { projects: [...state.projects, project], activeProjectId: project.id };
+      return { ...state, projects: [...state.projects, project], activeProjectId: project.id };
     }
     case "projects/replaceAll":
       return action.file;
@@ -55,5 +57,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ),
       };
     }
+    case "presets/save":
+      return { ...state, slotPresets: [...state.slotPresets, createSlotPreset(action.name, action.slotGeneration)] };
+    case "presets/remove":
+      return { ...state, slotPresets: state.slotPresets.filter((p) => p.id !== action.id) };
   }
 }

@@ -4,8 +4,8 @@ import { useEffect, useReducer, useState, type Dispatch } from "react";
 import { Button } from "@/app/components/ui";
 import { appReducer, defaultAppState, type AppAction } from "@/lib/shift/appState";
 import type { Action } from "@/lib/shift/state";
-import { LocalStorageAdapter } from "@/lib/shift/storage";
-import type { ShiftProject } from "@/lib/shift/types";
+import { IndexedDBAdapter } from "@/lib/shift/storage";
+import type { ShiftProject, SlotPreset } from "@/lib/shift/types";
 import { AssignPanel } from "./AssignPanel";
 import { EditPanel } from "./EditPanel";
 import { ExportPanel } from "./ExportPanel";
@@ -16,7 +16,7 @@ import { RoleSettingsPanel } from "./RoleSettingsPanel";
 import { SlotSettingsPanel } from "./SlotSettingsPanel";
 import { STEP_LABELS, StepIndicator } from "./StepIndicator";
 
-const storage = new LocalStorageAdapter();
+const storage = new IndexedDBAdapter();
 
 export function ShiftApp() {
   const [state, dispatch] = useReducer(appReducer, undefined, () => defaultAppState());
@@ -57,14 +57,18 @@ export function ShiftApp() {
 
   // key={project.id} により、別プロジェクトを開いたときに ProjectWizard を丸ごと再マウントして
   // ステップ位置などのローカル状態をリセットする(useEffect で明示的にリセットするより単純で安全)。
-  return <ProjectWizard key={project.id} project={project} dispatch={dispatch} />;
+  return (
+    <ProjectWizard key={project.id} project={project} slotPresets={state.slotPresets} dispatch={dispatch} />
+  );
 }
 
 function ProjectWizard({
   project,
+  slotPresets,
   dispatch,
 }: {
   project: ShiftProject;
+  slotPresets: SlotPreset[];
   dispatch: Dispatch<AppAction>;
 }) {
   const [step, setStep] = useState(0);
@@ -90,7 +94,17 @@ function ProjectWizard({
           onBackToList={() => dispatch({ type: "projects/select", id: null })}
         />
       )}
-      {step === 1 && <SlotSettingsPanel project={project} dispatch={projectDispatch} />}
+      {step === 1 && (
+        <SlotSettingsPanel
+          project={project}
+          dispatch={projectDispatch}
+          presets={slotPresets}
+          onSavePreset={(name) =>
+            dispatch({ type: "presets/save", name, slotGeneration: project.slotGeneration })
+          }
+          onDeletePreset={(id) => dispatch({ type: "presets/remove", id })}
+        />
+      )}
       {step === 2 && <RoleSettingsPanel project={project} dispatch={projectDispatch} />}
       {step === 3 && <ImportPanel project={project} dispatch={projectDispatch} />}
       {step === 4 && <AssignPanel project={project} dispatch={projectDispatch} />}

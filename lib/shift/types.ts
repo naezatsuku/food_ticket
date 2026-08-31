@@ -24,6 +24,13 @@ export interface SlotGenerationSettings {
   breaks: BreakPeriod[];
 }
 
+/** 毎回使い回す枠構成のプリセット(プロジェクトを跨いで再利用する) */
+export interface SlotPreset {
+  id: string;
+  name: string;
+  slotGeneration: SlotGenerationSettings;
+}
+
 /** 役割ごと・枠ごとの必要人数 */
 export interface RoleRequirement {
   slotId: string;
@@ -133,6 +140,10 @@ export function createPerson(partial?: Partial<Person>): Person {
     rolePreference: {},
     ...partial,
   };
+}
+
+export function createSlotPreset(name: string, slotGeneration: SlotGenerationSettings): SlotPreset {
+  return { id: crypto.randomUUID(), name, slotGeneration };
 }
 
 export function defaultShiftProject(): ShiftProject {

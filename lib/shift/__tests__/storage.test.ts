@@ -10,14 +10,14 @@ beforeEach(() => {
 describe("LocalStorageAdapter", () => {
   it("何も保存されていなければ空のプロジェクト一覧を返す", async () => {
     const adapter = new LocalStorageAdapter();
-    expect(await adapter.load()).toEqual({ projects: [], activeProjectId: null });
+    expect(await adapter.load()).toEqual({ projects: [], activeProjectId: null, slotPresets: [] });
   });
 
   it("保存した内容をそのまま読み込める(複数プロジェクト)", async () => {
     const adapter = new LocalStorageAdapter();
     const a = { ...defaultShiftProject(), id: "a", name: "文化祭1日目" };
     const b = { ...defaultShiftProject(), id: "b", name: "文化祭2日目" };
-    await adapter.save({ projects: [a, b], activeProjectId: "b" });
+    await adapter.save({ projects: [a, b], activeProjectId: "b", slotPresets: [] });
 
     const loaded = await adapter.load();
     expect(loaded.projects.map((p) => p.name)).toEqual(["文化祭1日目", "文化祭2日目"]);
