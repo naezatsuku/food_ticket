@@ -5,7 +5,7 @@ import { resolveGrid, sheetSizeMm, ticketOrigins, validateLayout } from "@/lib/g
 import { formatTicketNumber, numbersForSheet } from "@/lib/numbering";
 import type { AppState, Product } from "@/lib/types";
 import { TicketView } from "./TicketView";
-import { ErrorList } from "./ui";
+import { ErrorList } from "@/app/components/ui";
 
 const PAPER_LABEL = { A4: "A4", B5: "B5", A3: "A3" } as const;
 

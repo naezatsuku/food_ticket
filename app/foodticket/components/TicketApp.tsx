@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState } from "react";
+import Link from "next/link";
 import { resolveGrid } from "@/lib/geometry";
 import { reducer } from "@/lib/state";
 import { loadState, saveState } from "@/lib/storage";
@@ -70,7 +71,10 @@ export function TicketApp() {
   return (
     <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
       <header className="mb-5">
-        <h1 className="text-xl font-bold text-slate-800">🎫 食券メーカー</h1>
+        <Link href="/" className="text-xs font-medium text-blue-600 hover:underline">
+          ← ツール一覧
+        </Link>
+        <h1 className="mt-1 text-xl font-bold text-slate-800">🎫 食券メーカー</h1>
         <p className="mt-1 text-xs text-slate-500">
           学園祭・イベント用の食券をデザインして、通し番号付きPDFを印刷用に出力できます。
           データはすべてブラウザ内に保存されます。

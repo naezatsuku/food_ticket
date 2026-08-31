@@ -11,7 +11,7 @@ import type {
   SheetSettings,
   TicketSettings,
 } from "@/lib/types";
-import { Field, inputClass, NumberInput, Section } from "./ui";
+import { Field, inputClass, NumberInput, Section } from "@/app/components/ui";
 
 export function TicketSettingsPanel({
   ticket,

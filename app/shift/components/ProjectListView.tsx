@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type Dispatch } from "react";
+import Link from "next/link";
 import { Button, Section } from "@/app/components/ui";
 import type { AppAction } from "@/lib/shift/appState";
 import { parseImportedProject } from "@/lib/shift/storage";
@@ -29,7 +30,10 @@ export function ProjectListView({
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
       <header className="mb-5">
-        <h1 className="text-xl font-bold text-slate-800">📅 シフト作成</h1>
+        <Link href="/" className="text-xs font-medium text-blue-600 hover:underline">
+          ← ツール一覧
+        </Link>
+        <h1 className="mt-1 text-xl font-bold text-slate-800">📅 シフト作成</h1>
         <p className="mt-1 text-xs text-slate-500">
           プロジェクトを選んで編集を始めるか、新しいプロジェクトを作成してください。データはすべてブラウザ内に保存されます。
         </p>

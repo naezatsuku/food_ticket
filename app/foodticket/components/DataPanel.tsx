@@ -5,7 +5,7 @@ import { exportStateJson, parseImportedState } from "@/lib/storage";
 import type { Action } from "@/lib/state";
 import type { AppState } from "@/lib/types";
 import { defaultAppState } from "@/lib/types";
-import { Button, Section } from "./ui";
+import { Button, Section } from "@/app/components/ui";
 
 /** 設定の保存・復元と発行ログ */
 export function DataPanel({
