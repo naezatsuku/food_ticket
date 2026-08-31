@@ -7,9 +7,30 @@ export function normalizeDigits(s: string): string {
   return s.replace(/[０-９]/g, (c) => String(c.charCodeAt(0) - ZEN_DIGIT_START));
 }
 
+/**
+ * "9/13 10:00~11:40" のように時刻レンジの直前に付く日付らしき接頭辞
+ * ( 9/13 、9/13(土)、2026/9/13 、9月13日 など)を取り除く。
+ * このアプリは日付を扱わない(1日単位)ため、日付部分は無視して時刻だけを残す。
+ * 区切り文字の "/" が "9/13" の "/" と衝突して誤分割されるのを防ぐため、
+ * 分割より前に適用する。
+ */
+const DATE_PREFIX_RE =
+  /[0-9０-９]{1,4}\s*[/／]\s*[0-9０-９]{1,2}(?:\s*[/／]\s*[0-9０-９]{1,2})?|[0-9０-９]{1,2}\s*月\s*[0-9０-９]{1,2}\s*日/;
+// 直前が数字・コロン・ピリオドの場合は、日付ではなく時刻(HH:MM)の一部なのでマッチさせない
+// (例: "11:00/11:00-11:20" の "00/11" を日付と誤認しない)
+const DATE_PREFIX_BEFORE_TIME_RE = new RegExp(
+  `(?<![0-9０-９:：.])(?:${DATE_PREFIX_RE.source})(?:\\s*[（(][^）)]{0,4}[）)])?\\s*(?=[0-9０-９]{1,2}\\s*[:：.])`,
+  "g"
+);
+
+/** 時刻レンジの直前に付く日付らしき接頭辞を取り除く */
+export function stripDatePrefixes(s: string): string {
+  return s.replace(DATE_PREFIX_BEFORE_TIME_RE, "");
+}
+
 /** 区切り文字( , 、 / 全角空白 改行 )でセルのテキストを分割する */
 export function splitEntries(s: string): string[] {
-  return s
+  return stripDatePrefixes(s)
     .split(/[,、/　\r\n]+/)
     .map((x) => x.trim())
     .filter((x) => x !== "");

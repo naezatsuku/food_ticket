@@ -6,6 +6,7 @@ import {
   parseAvailabilityCell,
   parseTimeRangeToken,
   splitEntries,
+  stripDatePrefixes,
 } from "../text";
 
 describe("normalizeDigits", () => {
@@ -24,6 +25,39 @@ describe("splitEntries", () => {
   });
   it("空白のみの断片は除外する", () => {
     expect(splitEntries("a,, ,b")).toEqual(["a", "b"]);
+  });
+  it("日付+時刻('9/13 10:00~11:40')の日付部分が誤って区切り文字扱いされない", () => {
+    expect(splitEntries("9/13 10:00~11:40")).toEqual(["10:00~11:40"]);
+  });
+  it("日付付きの複数レンジも正しく分割する", () => {
+    expect(splitEntries("9/13 10:00-10:20, 9/14 13:00-14:00")).toEqual([
+      "10:00-10:20",
+      "13:00-14:00",
+    ]);
+  });
+});
+
+describe("stripDatePrefixes", () => {
+  it("「M/D 時刻」の日付部分を取り除く", () => {
+    expect(stripDatePrefixes("9/13 10:00~11:40")).toBe("10:00~11:40");
+  });
+  it("曜日付き「M/D(曜) 時刻」にも対応する", () => {
+    expect(stripDatePrefixes("9/13(土) 10:00-11:40")).toBe("10:00-11:40");
+  });
+  it("年/月/日形式にも対応する", () => {
+    expect(stripDatePrefixes("2026/9/13 10:00-11:40")).toBe("10:00-11:40");
+  });
+  it("「M月D日」形式にも対応する", () => {
+    expect(stripDatePrefixes("9月13日 10:00-11:40")).toBe("10:00-11:40");
+  });
+  it("時刻が続かない「9/13」単体は取り除かない(誤爆防止)", () => {
+    expect(stripDatePrefixes("9/13")).toBe("9/13");
+  });
+  it("日付が無い通常の時刻レンジには影響しない", () => {
+    expect(stripDatePrefixes("10:00-10:20, 11:20-11:40")).toBe("10:00-10:20, 11:20-11:40");
+  });
+  it("「/」区切りの複数レンジ('HH:MM/HH:MM')を日付と誤認しない", () => {
+    expect(stripDatePrefixes("10:00-10:20/10:20-10:40")).toBe("10:00-10:20/10:20-10:40");
   });
 });
 
@@ -59,6 +93,12 @@ describe("parseAvailabilityCell", () => {
       { start: "11:20", end: "11:40" },
     ]);
     expect(result.unparsedTokens).toEqual(["おかしい値"]);
+  });
+
+  it("日付付きの時刻レンジ('9/13 10:00~11:40')を正しく解析する", () => {
+    const result = parseAvailabilityCell("9/13 10:00~11:40");
+    expect(result.ranges).toEqual([{ start: "10:00", end: "11:40" }]);
+    expect(result.unparsedTokens).toEqual([]);
   });
 });
 
