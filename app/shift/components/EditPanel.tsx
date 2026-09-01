@@ -257,6 +257,17 @@ export function EditPanel({
   const pool = unassignedPeople(project);
   const personById = new Map(project.people.map((p) => [p.id, p]));
 
+  const assignedCountByPerson = new Map<string, number>();
+  for (const a of project.assignments) {
+    assignedCountByPerson.set(a.personId, (assignedCountByPerson.get(a.personId) ?? 0) + 1);
+  }
+  /** その人の割当コマ数が、上限コマ数(規定数)にまだ届いていないか */
+  function isUnderQuota(personId: string): boolean {
+    const max = personById.get(personId)?.maxSlots ?? project.defaultMaxSlotsPerPerson;
+    const count = assignedCountByPerson.get(personId) ?? 0;
+    return count < max;
+  }
+
   const ready = project.slots.length > 0 && project.roles.length > 0 && project.people.length > 0;
 
   return (
@@ -278,6 +289,17 @@ export function EditPanel({
               <p className="text-xs text-slate-400">
                 人名カードをドラッグしてセルへ移動、カード同士を重ねると入れ替え、プールへ戻すと未割当に戻ります。カードをクリックすると複製・削除できます。
               </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-4 rounded-full border border-red-400 bg-red-50" />
+                希望時間外に割り当て
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-4 rounded-full border border-dashed border-slate-400 bg-white" />
+                規定コマ数(上限コマ数)に未達
+              </span>
             </div>
 
             {copySource && (
@@ -375,6 +397,8 @@ export function EditPanel({
                                     personId={a.personId}
                                     name={personName}
                                     locked={a.locked}
+                                    outOfPreference={!personAvailableAtSlot(project, a.personId, slot.id)}
+                                    underQuota={isUnderQuota(a.personId)}
                                     onPointerDown={(e) =>
                                       handleChipPointerDown(e, a.personId, personName, {
                                         slotId: slot.id,
@@ -437,6 +461,7 @@ export function EditPanel({
                       personId={p.id}
                       name={p.name}
                       locked={false}
+                      underQuota={isUnderQuota(p.id)}
                       onPointerDown={(e) => handleChipPointerDown(e, p.id, p.name, null)}
                     />
                   ))}
@@ -489,6 +514,8 @@ function PersonChip({
   menuOpen,
   onDuplicate,
   onDelete,
+  outOfPreference,
+  underQuota,
 }: {
   personId: string;
   name: string;
@@ -499,16 +526,26 @@ function PersonChip({
   menuOpen?: boolean;
   onDuplicate?: () => void;
   onDelete?: () => void;
+  /** 希望していない時間帯の枠に割り当てられているか */
+  outOfPreference?: boolean;
+  /** その人の割当コマ数が上限コマ数(規定数)にまだ届いていないか */
+  underQuota?: boolean;
 }) {
+  const colorClasses = outOfPreference
+    ? "border-red-400 bg-red-50 text-red-700"
+    : locked
+      ? "border-amber-300 bg-amber-50 text-amber-800"
+      : "border-slate-300 bg-white text-slate-700";
   return (
     <span className="relative inline-block">
       <span
         data-person-id={personId}
         onPointerDown={onPointerDown}
         onClick={(e) => e.stopPropagation()}
+        title={outOfPreference ? "希望していない時間帯に割り当てられています" : undefined}
         className={`inline-flex cursor-grab items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] active:cursor-grabbing ${
-          locked ? "border-amber-300 bg-amber-50 text-amber-800" : "border-slate-300 bg-white text-slate-700"
-        }`}
+          underQuota ? "border-dashed" : "border-solid"
+        } ${colorClasses}`}
       >
         {name}
         {onToggleLock && (
