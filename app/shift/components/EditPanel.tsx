@@ -282,9 +282,11 @@ export function EditPanel({
 
             {copySource && (
               <div className="flex flex-wrap items-center gap-2 rounded border border-blue-300 bg-blue-50 px-2 py-1.5 text-xs text-blue-700">
-                <span>「{copySource.personName}」を複製中 — 割り当てたいセルをクリックしてください。</span>
-                <Button variant="ghost" onClick={() => setCopySource(null)}>
-                  キャンセル
+                <span>
+                  「{copySource.personName}」を複製中 — 割り当てたいセルを続けてクリックすると、他の枠にもまとめて割り当てられます。
+                </span>
+                <Button variant="primary" onClick={() => setCopySource(null)}>
+                  完了
                 </Button>
               </div>
             )}
@@ -345,8 +347,8 @@ export function EditPanel({
                             data-role-id={role.id}
                             onClick={() => {
                               if (!copySource) return;
+                              // 複製モードは維持したままにして、続けて他の枠にも割り当てられるようにする
                               applyPlace(copySource.personId, { slotId: slot.id, roleId: role.id });
-                              setCopySource(null);
                             }}
                             className={[
                               "min-w-32 rounded border p-1 align-top",
