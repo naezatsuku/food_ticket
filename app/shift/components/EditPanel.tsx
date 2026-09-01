@@ -36,6 +36,9 @@ function findHoveredPersonId(x: number, y: number): string | null {
   return chip?.dataset.personId ?? null;
 }
 
+/** これ以上動いたら「クリック」ではなく「ドラッグ」とみなす移動量(px) */
+const DRAG_THRESHOLD = 5;
+
 export function EditPanel({
   project,
   dispatch,
@@ -50,6 +53,21 @@ export function EditPanel({
 
   const [undoStack, setUndoStack] = useState<Assignment[][]>([]);
   const [redoStack, setRedoStack] = useState<Assignment[][]>([]);
+
+  /** クリックされた人名カードの「複製・削除」メニューの表示先 */
+  const [menuFor, setMenuFor] = useState<{ slotId: string; roleId: string; personId: string } | null>(
+    null
+  );
+  /** 複製モード中: この人をクリックしたセルに追加配置する */
+  const [copySource, setCopySource] = useState<{ personId: string; personName: string } | null>(null);
+  /** ドラッグ開始前の「押下中」情報。一定距離動くまではドラッグではなくクリックとして扱う */
+  const pressRef = useRef<{
+    personId: string;
+    personName: string;
+    from: DragState["from"];
+    startX: number;
+    startY: number;
+  } | null>(null);
 
   /** 割当を変更するアクションを、直前の状態をUndoスタックへ積んでからdispatchする */
   function dispatchWithUndo(action: Action) {
@@ -76,6 +94,11 @@ export function EditPanel({
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setCopySource(null);
+        setMenuFor(null);
+        return;
+      }
       if (!(e.ctrlKey || e.metaKey)) return;
       if (e.key === "z" && !e.shiftKey) {
         e.preventDefault();
@@ -90,13 +113,15 @@ export function EditPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.assignments]);
 
-  function startDrag(e: React.PointerEvent, personId: string, personName: string, from: DragState["from"]) {
+  /** 人名カードの押下を記録するだけで、まだドラッグは開始しない(クリックとの区別のため) */
+  function handleChipPointerDown(
+    e: React.PointerEvent,
+    personId: string,
+    personName: string,
+    from: DragState["from"]
+  ) {
     e.preventDefault();
-    const state: DragState = { personId, personName, from };
-    dragRef.current = state;
-    setDrag(state);
-    setHover(from ? { kind: "cell", slotId: from.slotId, roleId: from.roleId } : { kind: "pool" });
-    moveFloating(e.clientX, e.clientY);
+    pressRef.current = { personId, personName, from, startX: e.clientX, startY: e.clientY };
   }
 
   function moveFloating(x: number, y: number) {
@@ -165,22 +190,57 @@ export function EditPanel({
     dispatch({ type: "assignments/place", ...to, personId });
   }
 
+  // finishDrag は project 等を閉じ込めた最新の関数を常に呼べるよう ref 経由で参照する
+  // (下のポインタ監視 effect はマウント時の1回だけ購読するため、依存配列に含められない)
+  const finishDragRef = useRef(finishDrag);
   useEffect(() => {
-    if (!drag) return;
+    finishDragRef.current = finishDrag;
+  });
 
+  useEffect(() => {
     function onMove(e: PointerEvent) {
+      if (dragRef.current) {
+        moveFloating(e.clientX, e.clientY);
+        const target = findDropTarget(e.clientX, e.clientY);
+        setHover((prev) => (JSON.stringify(prev) === JSON.stringify(target) ? prev : target));
+        return;
+      }
+      const pending = pressRef.current;
+      if (!pending) return;
+      const moved = Math.hypot(e.clientX - pending.startX, e.clientY - pending.startY);
+      if (moved < DRAG_THRESHOLD) return;
+      // 一定距離を超えて動いたので、ここでドラッグとして開始する
+      const state: DragState = { personId: pending.personId, personName: pending.personName, from: pending.from };
+      dragRef.current = state;
+      pressRef.current = null;
+      setMenuFor(null);
+      setDrag(state);
+      setHover(
+        pending.from ? { kind: "cell", slotId: pending.from.slotId, roleId: pending.from.roleId } : { kind: "pool" }
+      );
       moveFloating(e.clientX, e.clientY);
-      const target = findDropTarget(e.clientX, e.clientY);
-      setHover((prev) => (JSON.stringify(prev) === JSON.stringify(target) ? prev : target));
     }
 
     function onUp(e: PointerEvent) {
       const current = dragRef.current;
-      dragRef.current = null;
-      setDrag(null);
-      setHover(null);
-      if (!current) return;
-      finishDrag(current, e.clientX, e.clientY);
+      if (current) {
+        dragRef.current = null;
+        setDrag(null);
+        setHover(null);
+        finishDragRef.current(current, e.clientX, e.clientY);
+        return;
+      }
+      const pending = pressRef.current;
+      pressRef.current = null;
+      if (!pending || !pending.from) return; // プールのカードのクリック等は何もしない
+      const { slotId, roleId } = pending.from;
+      const personId = pending.personId;
+      // ドラッグにならなかった(=クリックされた)ので、複製・削除メニューの開閉を切り替える
+      setMenuFor((prev) =>
+        prev && prev.slotId === slotId && prev.roleId === roleId && prev.personId === personId
+          ? null
+          : { slotId, roleId, personId }
+      );
     }
 
     window.addEventListener("pointermove", onMove);
@@ -189,8 +249,7 @@ export function EditPanel({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drag]);
+  }, []);
 
   const slots = [...project.slots].sort(
     (a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start)
@@ -201,7 +260,7 @@ export function EditPanel({
   const ready = project.slots.length > 0 && project.roles.length > 0 && project.people.length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onClick={() => setMenuFor(null)}>
       <Section title="編集(ドラッグで移動・入れ替え)">
         {!ready ? (
           <p className="text-sm text-slate-400">
@@ -217,9 +276,18 @@ export function EditPanel({
                 ↪ やり直す(Ctrl+Y)
               </Button>
               <p className="text-xs text-slate-400">
-                人名カードをドラッグしてセルへ移動、カード同士を重ねると入れ替え、プールへ戻すと未割当に戻ります。
+                人名カードをドラッグしてセルへ移動、カード同士を重ねると入れ替え、プールへ戻すと未割当に戻ります。カードをクリックすると複製・削除できます。
               </p>
             </div>
+
+            {copySource && (
+              <div className="flex flex-wrap items-center gap-2 rounded border border-blue-300 bg-blue-50 px-2 py-1.5 text-xs text-blue-700">
+                <span>「{copySource.personName}」を複製中 — 割り当てたいセルをクリックしてください。</span>
+                <Button variant="ghost" onClick={() => setCopySource(null)}>
+                  キャンセル
+                </Button>
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full border-separate border-spacing-1 text-xs">
@@ -264,47 +332,78 @@ export function EditPanel({
                           hover?.kind === "cell" && hover.slotId === slot.id && hover.roleId === role.id;
                         const isFull = occupants.length >= capacity && capacity > 0;
                         const dragging = drag !== null;
-                        const available = dragging && personAvailableAtSlot(project, drag.personId, slot.id);
+                        const copying = copySource !== null;
+                        const activePersonId = dragging ? drag.personId : (copySource?.personId ?? null);
+                        const available =
+                          activePersonId !== null && personAvailableAtSlot(project, activePersonId, slot.id);
+                        const highlighting = dragging || copying;
 
                         return (
                           <td
                             key={role.id}
                             data-slot-id={slot.id}
                             data-role-id={role.id}
+                            onClick={() => {
+                              if (!copySource) return;
+                              applyPlace(copySource.personId, { slotId: slot.id, roleId: role.id });
+                              setCopySource(null);
+                            }}
                             className={[
                               "min-w-32 rounded border p-1 align-top",
-                              dragging
+                              copying ? "cursor-pointer" : "",
+                              highlighting
                                 ? available
                                   ? "border-emerald-300 bg-emerald-50"
                                   : "border-slate-200 bg-slate-100"
                                 : "border-slate-200 bg-white",
-                              isFull && dragging ? "ring-2 ring-red-400" : "",
+                              isFull && highlighting ? "ring-2 ring-red-400" : "",
                               isHovered ? "outline outline-2 outline-blue-400" : "",
                             ].join(" ")}
                           >
                             <div className="flex flex-wrap gap-1">
-                              {occupants.map((a) => (
-                                <PersonChip
-                                  key={a.personId}
-                                  personId={a.personId}
-                                  name={personById.get(a.personId)?.name ?? a.personId}
-                                  locked={a.locked}
-                                  onPointerDown={(e) =>
-                                    startDrag(e, a.personId, personById.get(a.personId)?.name ?? a.personId, {
-                                      slotId: slot.id,
-                                      roleId: role.id,
-                                    })
-                                  }
-                                  onToggleLock={() =>
-                                    dispatch({
-                                      type: "assignments/toggleLock",
-                                      slotId: slot.id,
-                                      roleId: role.id,
-                                      personId: a.personId,
-                                    })
-                                  }
-                                />
-                              ))}
+                              {occupants.map((a) => {
+                                const personName = personById.get(a.personId)?.name ?? a.personId;
+                                const isMenuOpen =
+                                  menuFor?.slotId === slot.id &&
+                                  menuFor?.roleId === role.id &&
+                                  menuFor?.personId === a.personId;
+                                return (
+                                  <PersonChip
+                                    key={a.personId}
+                                    personId={a.personId}
+                                    name={personName}
+                                    locked={a.locked}
+                                    onPointerDown={(e) =>
+                                      handleChipPointerDown(e, a.personId, personName, {
+                                        slotId: slot.id,
+                                        roleId: role.id,
+                                      })
+                                    }
+                                    onToggleLock={() =>
+                                      dispatch({
+                                        type: "assignments/toggleLock",
+                                        slotId: slot.id,
+                                        roleId: role.id,
+                                        personId: a.personId,
+                                      })
+                                    }
+                                    menuOpen={isMenuOpen}
+                                    onDuplicate={() => {
+                                      setCopySource({ personId: a.personId, personName });
+                                      setMenuFor(null);
+                                    }}
+                                    onDelete={() => {
+                                      dispatchWithUndo({
+                                        type: "assignments/remove",
+                                        slotId: slot.id,
+                                        roleId: role.id,
+                                        personId: a.personId,
+                                      });
+                                      setMenuFor(null);
+                                    }}
+                                  />
+                                );
+                              })}
                             </div>
                             <p className="mt-0.5 text-[10px] text-slate-400">
                               {occupants.length}/{capacity}
@@ -336,7 +435,7 @@ export function EditPanel({
                       personId={p.id}
                       name={p.name}
                       locked={false}
-                      onPointerDown={(e) => startDrag(e, p.id, p.name, null)}
+                      onPointerDown={(e) => handleChipPointerDown(e, p.id, p.name, null)}
                     />
                   ))}
                 </div>
@@ -385,32 +484,66 @@ function PersonChip({
   locked,
   onPointerDown,
   onToggleLock,
+  menuOpen,
+  onDuplicate,
+  onDelete,
 }: {
   personId: string;
   name: string;
   locked: boolean;
   onPointerDown: (e: React.PointerEvent) => void;
   onToggleLock?: () => void;
+  /** 複製・削除メニューを表示するか(枠に配置済みのカードのみ対応) */
+  menuOpen?: boolean;
+  onDuplicate?: () => void;
+  onDelete?: () => void;
 }) {
   return (
-    <span
-      data-person-id={personId}
-      onPointerDown={onPointerDown}
-      className={`inline-flex cursor-grab items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] active:cursor-grabbing ${
-        locked ? "border-amber-300 bg-amber-50 text-amber-800" : "border-slate-300 bg-white text-slate-700"
-      }`}
-    >
-      {name}
-      {onToggleLock && (
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={onToggleLock}
-          className="text-[10px] opacity-70 hover:opacity-100"
-          title={locked ? "ロック解除" : "ロック"}
-        >
-          {locked ? "🔒" : "🔓"}
-        </button>
+    <span className="relative inline-block">
+      <span
+        data-person-id={personId}
+        onPointerDown={onPointerDown}
+        onClick={(e) => e.stopPropagation()}
+        className={`inline-flex cursor-grab items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] active:cursor-grabbing ${
+          locked ? "border-amber-300 bg-amber-50 text-amber-800" : "border-slate-300 bg-white text-slate-700"
+        }`}
+      >
+        {name}
+        {onToggleLock && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={onToggleLock}
+            className="text-[10px] opacity-70 hover:opacity-100"
+            title={locked ? "ロック解除" : "ロック"}
+          >
+            {locked ? "🔒" : "🔓"}
+          </button>
+        )}
+      </span>
+      {menuOpen && onDuplicate && onDelete && (
+        <span className="absolute left-0 top-full z-20 mt-1 flex gap-1 whitespace-nowrap rounded border border-slate-300 bg-white p-1 shadow-md">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDuplicate();
+            }}
+            className="rounded px-2 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50"
+          >
+            複製
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="rounded px-2 py-0.5 text-[10px] font-medium text-red-600 hover:bg-red-50"
+          >
+            削除
+          </button>
+        </span>
       )}
     </span>
   );
