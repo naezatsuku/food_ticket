@@ -37,6 +37,14 @@ export function TicketSettingsPanel({
             onChange={(n) => dispatch({ type: "ticket/set", patch: { heightMm: n } })}
           />
         </Field>
+        <Field label="枠線の太さ(mm)">
+          <NumberInput
+            value={ticket.borderWidthMm}
+            min={0.1}
+            step={0.1}
+            onChange={(n) => dispatch({ type: "ticket/set", patch: { borderWidthMm: n } })}
+          />
+        </Field>
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -117,7 +125,7 @@ export function SheetSettingsPanel({
   dispatch: Dispatch<Action>;
 }) {
   const { w, h } = sheetSizeMm(sheet.paper, sheet.orientation);
-  const auto = autoGrid(w, h, sheet.marginMm, ticket.widthMm, ticket.heightMm);
+  const auto = autoGrid(w, h, sheet.marginMm, ticket.widthMm, ticket.heightMm, sheet.gapMm);
 
   return (
     <Section title="用紙・シートレイアウト">
@@ -155,6 +163,13 @@ export function SheetSettingsPanel({
             value={sheet.marginMm}
             min={0}
             onChange={(n) => dispatch({ type: "sheet/set", patch: { marginMm: n } })}
+          />
+        </Field>
+        <Field label="券の間隔(mm)">
+          <NumberInput
+            value={sheet.gapMm}
+            min={0}
+            onChange={(n) => dispatch({ type: "sheet/set", patch: { gapMm: n } })}
           />
         </Field>
         <Field label="切り取りガイド">

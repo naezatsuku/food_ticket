@@ -135,7 +135,6 @@ export interface TicketContent {
 }
 
 const PAD = 3; // 券内の基本パディング(mm)
-const BORDER_W = 0.5; // 枠線の太さ(mm、印刷時は画面プレビューで最低2px相当になるよう別途下限あり)
 const NUMBER_SIZE = 2.2; // 番号のフォントサイズ(mm。商品名・値段より控えめに)
 const PRICE_MAX_SIZE = 2.2; // 値段の最大フォントサイズ(mm。番号と同じサイズに)
 const MIN_SPACING = 1; // 番号・商品名・値段の間の最小スペース(mm)
@@ -356,7 +355,7 @@ export function computeTicketLayout(
     heightMm: h,
     texts,
     borderRect,
-    borderWidthMm: BORDER_W,
+    borderWidthMm: ticket.borderWidthMm,
     perforationX,
     perforationY: { from: 1.5, to: h - 1.5 },
     illustrationBox,

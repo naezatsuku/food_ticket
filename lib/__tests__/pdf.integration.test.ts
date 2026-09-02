@@ -35,11 +35,13 @@ describe("generateTicketsPdf(統合)", () => {
       heightMm: 50,
       stubEnabled: true,
       stubWidthMm: 25,
+      borderWidthMm: 0.5,
     };
     const sheet: typeof d.sheet = {
       paper: "A4",
       orientation: "portrait",
       marginMm: 10,
+      gapMm: 0,
       cutGuide: "dashed",
       manualGrid: null,
     };

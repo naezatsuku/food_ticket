@@ -1,6 +1,6 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { MM_TO_PT, resolveGrid, sheetSizeMm, sheetsNeeded, ticketOrigins } from "./geometry";
+import { columnEdges, MM_TO_PT, resolveGrid, rowEdges, sheetSizeMm, sheetsNeeded, ticketOrigins } from "./geometry";
 import { countInRange, formatTicketNumber, numbersForSheet } from "./numbering";
 import { computeTicketLayout, formatPrice, type MeasureFn, type TicketLayout } from "./ticketLayout";
 import { dataUrlToBytes, emojiToPngDataUrl } from "./images";
@@ -138,10 +138,13 @@ function drawCutGuides(
   if (sheet.cutGuide === "none") return;
   const grid = resolveGrid(ticket, sheet);
   const c = converters(sheetHMm);
-  const x0 = grid.originX;
-  const y0 = grid.originY;
-  const x1 = grid.originX + grid.cols * ticket.widthMm;
-  const y1 = grid.originY + grid.rows * ticket.heightMm;
+  const xs = columnEdges(grid, ticket.widthMm, sheet.gapMm);
+  const ys = rowEdges(grid, ticket.heightMm, sheet.gapMm);
+  if (xs.length === 0 || ys.length === 0) return;
+  const x0 = xs[0];
+  const x1 = xs[xs.length - 1];
+  const y0 = ys[0];
+  const y1 = ys[ys.length - 1];
 
   if (sheet.cutGuide === "dashed") {
     const opts = {
@@ -149,24 +152,20 @@ function drawCutGuides(
       color: GUIDE_GRAY,
       dashArray: [c.len(2), c.len(1.5)],
     };
-    for (let i = 0; i <= grid.cols; i++) {
-      const x = x0 + i * ticket.widthMm;
+    for (const x of xs) {
       page.drawLine({ start: { x: c.x(x), y: c.yTop(y0) }, end: { x: c.x(x), y: c.yTop(y1) }, ...opts });
     }
-    for (let j = 0; j <= grid.rows; j++) {
-      const y = y0 + j * ticket.heightMm;
+    for (const y of ys) {
       page.drawLine({ start: { x: c.x(x0), y: c.yTop(y) }, end: { x: c.x(x1), y: c.yTop(y) }, ...opts });
     }
     return;
   }
 
-  // トンボ: 各交点に十字マーク
+  // トンボ: 各券の四隅に十字マーク
   const ARM = 2.5; // 十字の腕の長さ(mm)
   const opts = { thickness: c.len(0.15), color: INK };
-  for (let i = 0; i <= grid.cols; i++) {
-    for (let j = 0; j <= grid.rows; j++) {
-      const x = x0 + i * ticket.widthMm;
-      const y = y0 + j * ticket.heightMm;
+  for (const x of xs) {
+    for (const y of ys) {
       page.drawLine({
         start: { x: c.x(x - ARM), y: c.yTop(y) },
         end: { x: c.x(x + ARM), y: c.yTop(y) },
@@ -211,7 +210,7 @@ export async function generateTicketsPdf(input: PdfJobInput): Promise<PdfJobResu
     bold.widthOfTextAtSize(text, sizeMm * MM_TO_PT) / MM_TO_PT;
 
   const illustration = await embedIllustration(doc, product);
-  const origins = ticketOrigins(grid, ticket.widthMm, ticket.heightMm);
+  const origins = ticketOrigins(grid, ticket.widthMm, ticket.heightMm, sheet.gapMm);
   const priceText = formatPrice(product.price);
 
   doc.setTitle(`食券 ${product.name}`);

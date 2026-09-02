@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { resolveGrid, sheetSizeMm, ticketOrigins, validateLayout } from "@/lib/geometry";
+import { columnEdges, resolveGrid, rowEdges, sheetSizeMm, ticketOrigins, validateLayout } from "@/lib/geometry";
 import { formatTicketNumber, numbersForSheet } from "@/lib/numbering";
 import type { AppState, Product } from "@/lib/types";
 import { TicketView } from "./TicketView";
@@ -47,14 +47,18 @@ export function SheetPreview({
   const scale = containerW > 0 ? containerW / sheetW : 0;
   const px = (mm: number) => mm * scale;
 
-  const origins = ticketOrigins(grid, ticket.widthMm, ticket.heightMm);
+  const origins = ticketOrigins(grid, ticket.widthMm, ticket.heightMm, sheet.gapMm);
   const numbers =
     perSheet > 0 && endNumber >= startNumber
       ? numbersForSheet(startNumber, endNumber, perSheet, 0)
       : [];
 
-  const gridX1 = grid.originX + grid.cols * ticket.widthMm;
-  const gridY1 = grid.originY + grid.rows * ticket.heightMm;
+  const xEdges = columnEdges(grid, ticket.widthMm, sheet.gapMm);
+  const yEdges = rowEdges(grid, ticket.heightMm, sheet.gapMm);
+  const gridX0 = xEdges[0] ?? grid.originX;
+  const gridX1 = xEdges[xEdges.length - 1] ?? grid.originX;
+  const gridY0 = yEdges[0] ?? grid.originY;
+  const gridY1 = yEdges[yEdges.length - 1] ?? grid.originY;
 
   return (
     <div className="space-y-2">
@@ -89,49 +93,45 @@ export function SheetPreview({
             {/* 切り取りガイド */}
             {perSheet > 0 &&
               sheet.cutGuide === "dashed" &&
-              [...Array(grid.cols + 1)].map((_, i) => (
+              xEdges.map((x, i) => (
                 <div
                   key={`v${i}`}
                   className="absolute border-l border-dashed border-slate-400"
                   style={{
-                    left: px(grid.originX + i * ticket.widthMm),
-                    top: px(grid.originY),
-                    height: px(gridY1 - grid.originY),
+                    left: px(x),
+                    top: px(gridY0),
+                    height: px(gridY1 - gridY0),
                   }}
                 />
               ))}
             {perSheet > 0 &&
               sheet.cutGuide === "dashed" &&
-              [...Array(grid.rows + 1)].map((_, i) => (
+              yEdges.map((y, i) => (
                 <div
                   key={`h${i}`}
                   className="absolute border-t border-dashed border-slate-400"
                   style={{
-                    left: px(grid.originX),
-                    top: px(grid.originY + i * ticket.heightMm),
-                    width: px(gridX1 - grid.originX),
+                    left: px(gridX0),
+                    top: px(y),
+                    width: px(gridX1 - gridX0),
                   }}
                 />
               ))}
             {perSheet > 0 &&
               sheet.cutGuide === "crop" &&
-              [...Array(grid.cols + 1)].flatMap((_, i) =>
-                [...Array(grid.rows + 1)].map((_, j) => {
-                  const x = grid.originX + i * ticket.widthMm;
-                  const y = grid.originY + j * ticket.heightMm;
-                  return (
-                    <span key={`c${i}-${j}`}>
-                      <span
-                        className="absolute bg-slate-700"
-                        style={{ left: px(x - 2.5), top: px(y), width: px(5), height: 1 }}
-                      />
-                      <span
-                        className="absolute bg-slate-700"
-                        style={{ left: px(x), top: px(y - 2.5), width: 1, height: px(5) }}
-                      />
-                    </span>
-                  );
-                })
+              xEdges.flatMap((x, i) =>
+                yEdges.map((y, j) => (
+                  <span key={`c${i}-${j}`}>
+                    <span
+                      className="absolute bg-slate-700"
+                      style={{ left: px(x - 2.5), top: px(y), width: px(5), height: 1 }}
+                    />
+                    <span
+                      className="absolute bg-slate-700"
+                      style={{ left: px(x), top: px(y - 2.5), width: 1, height: px(5) }}
+                    />
+                  </span>
+                ))
               )}
             {/* 券 */}
             {product &&

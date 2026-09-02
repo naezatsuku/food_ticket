@@ -18,6 +18,7 @@ const baseTicket: TicketSettings = {
   heightMm: 50,
   stubEnabled: false,
   stubWidthMm: 25,
+  borderWidthMm: 0.5,
 };
 
 describe("fitFontSize", () => {

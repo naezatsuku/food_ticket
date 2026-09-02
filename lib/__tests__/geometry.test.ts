@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   autoGrid,
+  columnEdges,
   resolveGrid,
+  rowEdges,
   sheetSizeMm,
   sheetsNeeded,
   ticketOrigins,
@@ -14,12 +16,14 @@ const ticket90x50: TicketSettings = {
   heightMm: 50,
   stubEnabled: false,
   stubWidthMm: 25,
+  borderWidthMm: 0.5,
 };
 
 const a4Sheet: SheetSettings = {
   paper: "A4",
   orientation: "portrait",
   marginMm: 10,
+  gapMm: 0,
   cutGuide: "dashed",
   manualGrid: null,
 };
@@ -47,6 +51,12 @@ describe("autoGrid", () => {
   it("余白が大きいと入る枚数が減る", () => {
     expect(autoGrid(210, 297, 20, 90, 50)).toEqual({ cols: 1, rows: 5 });
   });
+  it("券の間隔(gapMm)が大きいと入る枚数が減る", () => {
+    expect(autoGrid(210, 297, 10, 90, 50, 15)).toEqual({ cols: 1, rows: 4 });
+  });
+  it("gapMm=0 なら従来どおり", () => {
+    expect(autoGrid(210, 297, 10, 90, 50, 0)).toEqual({ cols: 2, rows: 5 });
+  });
 });
 
 describe("resolveGrid / ticketOrigins", () => {
@@ -73,6 +83,34 @@ describe("resolveGrid / ticketOrigins", () => {
     expect(origins[0]).toEqual({ x: 15, y: 23.5 });
     expect(origins[1]).toEqual({ x: 105, y: 23.5 });
     expect(origins[2]).toEqual({ x: 15, y: 73.5 });
+  });
+
+  it("gapMm を指定すると隙間込みで中央寄せされ、券間が離れる", () => {
+    const gappedSheet: SheetSettings = { ...a4Sheet, gapMm: 10 };
+    const grid = resolveGrid(ticket90x50, gappedSheet);
+    // 縦は 50mm+隙間10mm=60mm ピッチ → 277mm領域に4枚(4×60-10=230mm)
+    expect(grid.rows).toBe(4);
+    expect(grid.cols).toBe(2);
+    // 券幅190mm + 隙間10mm = 190mm、余白領域190mmちょうど → 左右0mm、印刷余白10mmのみ
+    expect(grid.originX).toBeCloseTo(10);
+    const origins = ticketOrigins(grid, 90, 50, 10);
+    expect(origins[0]).toEqual({ x: 10, y: grid.originY });
+    expect(origins[1]).toEqual({ x: 110, y: grid.originY });
+  });
+});
+
+describe("columnEdges / rowEdges", () => {
+  it("gapMm=0 なら券同士が接するので境界線は cols+1 本", () => {
+    const grid = { rows: 1, cols: 2, originX: 0, originY: 0 };
+    expect(columnEdges(grid, 50, 0)).toEqual([0, 50, 100]);
+  });
+  it("gapMm>0 なら各券の左右の辺がそれぞれ現れる", () => {
+    const grid = { rows: 1, cols: 2, originX: 0, originY: 0 };
+    expect(columnEdges(grid, 50, 5)).toEqual([0, 50, 55, 105]);
+  });
+  it("rowEdgesも同様", () => {
+    const grid = { rows: 2, cols: 1, originX: 0, originY: 0 };
+    expect(rowEdges(grid, 30, 5)).toEqual([0, 30, 35, 65]);
   });
 });
 
