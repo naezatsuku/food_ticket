@@ -4,9 +4,11 @@ import {
   buildPeopleFromWideFormat,
   findSlotAlignmentWarning,
   mergeAdjacentRanges,
+  mergePeopleByName,
   resolveDate,
 } from "../toPeople";
-import type { TimeSlot } from "../../types";
+import { createPerson } from "../../types";
+import type { Person, TimeSlot } from "../../types";
 
 const DATE = "2026-09-13";
 
@@ -146,6 +148,108 @@ describe("buildPeopleFromLongFormat", () => {
     ];
     const drafts = buildPeopleFromLongFormat(grid, true, ["name", "timeRange"], slots);
     expect(drafts).toHaveLength(1);
+  });
+
+  describe("forcedDate(対象日を指定して日付なしで取り込む)", () => {
+    const twoDaySlots: TimeSlot[] = [
+      ...slots,
+      { id: "s3", date: "2026-09-14", start: "09:00", end: "09:20", capacity: 1 },
+    ];
+
+    it("対象日が複数あって本来なら特定できないケースでも、forcedDateがあれば解決できる", () => {
+      const grid = [
+        ["氏名", "時間帯"],
+        ["山田太郎", "09:00-09:20"],
+      ];
+      const drafts = buildPeopleFromLongFormat(
+        grid,
+        true,
+        ["name", "timeRange"],
+        twoDaySlots,
+        "2026-09-14"
+      );
+      expect(drafts[0].available).toEqual([{ date: "2026-09-14", start: "09:00", end: "09:20" }]);
+      expect(drafts[0].issues).toEqual([]);
+    });
+
+    it("セルに日付が書かれていても、forcedDateが優先される", () => {
+      const grid = [
+        ["氏名", "時間帯"],
+        ["山田太郎", "9/13 09:00-09:20"],
+      ];
+      const drafts = buildPeopleFromLongFormat(
+        grid,
+        true,
+        ["name", "timeRange"],
+        twoDaySlots,
+        "2026-09-14"
+      );
+      expect(drafts[0].available).toEqual([{ date: "2026-09-14", start: "09:00", end: "09:20" }]);
+    });
+  });
+});
+
+describe("mergePeopleByName", () => {
+  function draft(name: string, available: Person["available"], maxSlots: number | null = null) {
+    return { rowIndex: 0, name, available, maxSlots, issues: [] };
+  }
+
+  it("名簿に無い氏名は新規メンバーとして追加する", () => {
+    const result = mergePeopleByName([], [draft("山田太郎", [{ date: DATE, start: "09:00", end: "09:20" }])]);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("山田太郎");
+    expect(result[0].available).toEqual([{ date: DATE, start: "09:00", end: "09:20" }]);
+  });
+
+  it("同じ氏名の既存メンバーは、取り込んだ日付の希望だけを更新し、他の日付は残す", () => {
+    const existing = createPerson({
+      name: "山田太郎",
+      available: [
+        { date: "2026-09-12", start: "10:00", end: "11:00" },
+        { date: DATE, start: "09:00", end: "10:00" },
+      ],
+    });
+    const result = mergePeopleByName(
+      [existing],
+      [draft("山田太郎", [{ date: DATE, start: "13:00", end: "14:00" }])]
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].available).toEqual([
+      { date: "2026-09-12", start: "10:00", end: "11:00" },
+      { date: DATE, start: "13:00", end: "14:00" },
+    ]);
+  });
+
+  it("既存メンバーのIDは維持される(割当の継続性のため)", () => {
+    const existing = createPerson({ name: "山田太郎", available: [] });
+    const result = mergePeopleByName(
+      [existing],
+      [draft("山田太郎", [{ date: DATE, start: "09:00", end: "09:20" }])]
+    );
+    expect(result[0].id).toBe(existing.id);
+  });
+
+  it("今回の取り込みに含まれない既存メンバーはそのまま変更しない", () => {
+    const untouched = createPerson({
+      name: "鈴木花子",
+      available: [{ date: DATE, start: "09:00", end: "09:20" }],
+    });
+    const result = mergePeopleByName([untouched], [draft("山田太郎", [{ date: DATE, start: "09:00", end: "09:20" }])]);
+    expect(result).toContainEqual(untouched);
+  });
+
+  it("上限コマ数は今回の取り込みで指定があれば上書きし、無ければ既存の値を維持する", () => {
+    const existing = createPerson({ name: "山田太郎", available: [], maxSlots: 3 });
+    const result1 = mergePeopleByName([existing], [draft("山田太郎", [], null)]);
+    expect(result1[0].maxSlots).toBe(3);
+
+    const result2 = mergePeopleByName([existing], [draft("山田太郎", [], 5)]);
+    expect(result2[0].maxSlots).toBe(5);
+  });
+
+  it("氏名が空欄のdraftは無視する", () => {
+    const result = mergePeopleByName([], [draft("", [{ date: DATE, start: "09:00", end: "09:20" }])]);
+    expect(result).toEqual([]);
   });
 });
 

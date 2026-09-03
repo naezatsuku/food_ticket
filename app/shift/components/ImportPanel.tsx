@@ -14,6 +14,7 @@ import { parseSingleDateTimeRange } from "@/lib/shift/import/text";
 import {
   buildPeopleFromLongFormat,
   buildPeopleFromWideFormat,
+  mergePeopleByName,
   resolveDate,
   type PersonDraft,
   type WideTimeColumn,
@@ -21,7 +22,6 @@ import {
 import { parseWorkbookFile, type ParsedWorkbook } from "@/lib/shift/import/workbook";
 import { formatDateShort } from "@/lib/shift/slots";
 import type { Action } from "@/lib/shift/state";
-import { createPerson } from "@/lib/shift/types";
 import type { ShiftProject } from "@/lib/shift/types";
 
 const COLUMN_ROLE_LABELS: Record<ColumnRole, string> = {
@@ -49,6 +49,8 @@ interface ImportDraft {
   wideColumns: WideColumnDraft[];
   workbook: ParsedWorkbook | null;
   sheetName: string | null;
+  /** ロング形式で指定すると、セルに日付が無くても全行をこの日付として取り込む("" なら未指定) */
+  forcedDate: string;
 }
 
 function buildWideColumns(
@@ -91,6 +93,7 @@ function computeInitialDraft(
       wideColumns: buildWideColumns(grid, nameColumnIndex, configuredDates),
       workbook,
       sheetName,
+      forcedDate: "",
     };
   }
   const { columnRoles } = inferLongFormatColumns(grid, hasHeaderRow);
@@ -103,6 +106,7 @@ function computeInitialDraft(
     wideColumns: [],
     workbook,
     sheetName,
+    forcedDate: "",
   };
 }
 
@@ -186,7 +190,13 @@ export function ImportPanel({
   const drafts: PersonDraft[] = useMemo(() => {
     if (!draft) return [];
     if (draft.format === "long") {
-      return buildPeopleFromLongFormat(draft.grid, draft.hasHeaderRow, draft.columnRoles, project.slots);
+      return buildPeopleFromLongFormat(
+        draft.grid,
+        draft.hasHeaderRow,
+        draft.columnRoles,
+        project.slots,
+        draft.forcedDate || undefined
+      );
     }
     const timeColumns: WideTimeColumn[] = draft.wideColumns
       .filter((c) => c.enabled && c.date !== "" && c.start !== "" && c.end !== "" && c.start < c.end)
@@ -210,15 +220,13 @@ export function ImportPanel({
     if (!draft) return;
     const ok = confirm(
       blankNameCount > 0
-        ? `${importableCount}件を取り込みます(氏名が空欄の${blankNameCount}件はスキップされます)。現在の名簿は置き換えられます。よろしいですか?`
-        : `${importableCount}件を取り込みます。現在の名簿は置き換えられます。よろしいですか?`
+        ? `${importableCount}件を取り込みます(氏名が空欄の${blankNameCount}件はスキップされます)。同じ氏名の人がいれば、今回取り込んだ日付の希望だけを更新します。よろしいですか?`
+        : `${importableCount}件を取り込みます。同じ氏名の人がいれば、今回取り込んだ日付の希望だけを更新します。よろしいですか?`
     );
     if (!ok) return;
-    const people = drafts
-      .filter((d) => d.name.trim() !== "")
-      .map((d) => createPerson({ name: d.name.trim(), available: d.available, maxSlots: d.maxSlots }));
+    const people = mergePeopleByName(project.people, drafts);
     dispatch({ type: "people/replace", people });
-    setLastImportedCount(people.length);
+    setLastImportedCount(importableCount);
     setDraft(null);
   }
 
@@ -269,7 +277,7 @@ export function ImportPanel({
           {loadError && <p className="text-xs text-red-600">{loadError}</p>}
           {lastImportedCount !== null && (
             <p className="text-xs text-emerald-600">
-              {lastImportedCount}件のメンバーを取り込みました。続けて追加のデータを貼り付け/選択すると、名簿が置き換わります。
+              {lastImportedCount}件のメンバーを取り込みました。続けて別の日のデータを貼り付け/選択すると、同じ氏名の人はその日の希望が追加され、他の人はそのまま残ります。
             </p>
           )}
         </Section>
@@ -328,6 +336,21 @@ export function ImportPanel({
                 やり直す
               </Button>
             </div>
+            {draft.format === "long" && (
+              <div className="mt-3">
+                <Field label="対象日を指定(セルに日付を書かずに取り込みたい場合)">
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={draft.forcedDate}
+                    onChange={(e) => setDraft({ ...draft, forcedDate: e.target.value })}
+                  />
+                </Field>
+                <p className="mt-1 text-xs text-slate-400">
+                  指定すると、セルに日付が書かれていなくても(書かれていても)、この日付として取り込みます。日ごとに分けて貼り付け・取り込みを繰り返す場合に使います。
+                </p>
+              </div>
+            )}
           </Section>
 
           {draft.format === "long" ? (

@@ -1,8 +1,9 @@
 import { isPositiveMark, parseAvailabilityCell, parseDateText } from "./text";
 import { formatDateShort } from "../slots";
+import { createPerson } from "../types";
 import type { ParsedGrid } from "./parseSource";
 import type { ColumnRole } from "./detect";
-import type { AvailabilityRange, TimeSlot } from "../types";
+import type { AvailabilityRange, Person, TimeSlot } from "../types";
 
 export interface PersonDraft {
   /** grid上の元の行番号(確認画面でのハイライトに使う) */
@@ -90,7 +91,9 @@ export function buildPeopleFromLongFormat(
   grid: ParsedGrid,
   hasHeaderRow: boolean,
   columnRoles: ColumnRole[],
-  slots: TimeSlot[]
+  slots: TimeSlot[],
+  /** 指定すると、セルに日付が無く(もしくは含まれていても)全ての時刻レンジをこの日付として取り込む */
+  forcedDate?: string
 ): PersonDraft[] {
   const nameCol = columnRoles.indexOf("name");
   const timeCols = columnRoles.reduce<number[]>((acc, role, i) => {
@@ -118,7 +121,7 @@ export function buildPeopleFromLongFormat(
         issues.push(`「${token}」を時刻レンジとして解析できませんでした。`);
       }
       for (const rr of parsed.ranges) {
-        const date = resolveDate(rr.dateText, configuredDates);
+        const date = forcedDate || resolveDate(rr.dateText, configuredDates);
         if (date === "") {
           issues.push(
             `「${rr.start}〜${rr.end}」の対象日が特定できません(枠設定タブで対象日を確認するか、セルに日付を含めてください)。`
@@ -179,4 +182,42 @@ export function buildPeopleFromWideFormat(
   }
 
   return drafts;
+}
+
+/**
+ * 取り込んだ内容(drafts)を既存の名簿(existingPeople)とマージする。
+ * 日ごとに分けて何度も取り込む運用を想定し、氏名が一致する人は「取り込んだ日付の希望」だけを
+ * 上書きし、それ以外の日付の希望はそのまま残す(例: 9/12分を取り込んだ後、同じ人の9/13分を
+ * 別途取り込んでも、9/12の希望は消えず両日分がまとまる)。
+ * - 名簿に無い氏名は新規メンバーとして追加する
+ * - 今回のdraftsに含まれない既存メンバーはそのまま変更しない(IDも維持されるので割当も保持される)
+ * - 上限コマ数(maxSlots)は、今回の取り込みで指定があれば上書き、無ければ既存の値を維持する
+ */
+export function mergePeopleByName(existingPeople: Person[], drafts: PersonDraft[]): Person[] {
+  const people = existingPeople.map((p) => ({ ...p, available: [...p.available] }));
+  const indexByName = new Map(people.map((p, i) => [p.name.trim(), i]));
+
+  for (const d of drafts) {
+    const name = d.name.trim();
+    if (name === "") continue;
+
+    const touchedDates = new Set(d.available.map((r) => r.date));
+    const existingIndex = indexByName.get(name);
+
+    if (existingIndex === undefined) {
+      indexByName.set(name, people.length);
+      people.push(createPerson({ name, available: d.available, maxSlots: d.maxSlots }));
+      continue;
+    }
+
+    const existing = people[existingIndex];
+    const keptAvailable = existing.available.filter((r) => !touchedDates.has(r.date));
+    people[existingIndex] = {
+      ...existing,
+      available: mergeAdjacentRanges([...keptAvailable, ...d.available]),
+      maxSlots: d.maxSlots !== null ? d.maxSlots : existing.maxSlots,
+    };
+  }
+
+  return people;
 }
