@@ -53,7 +53,7 @@ describe("generateTicketsPdf(統合)", () => {
         illustration: { kind: "image", dataUrl: TINY_PNG },
       },
       ticket, // 90×50mm・半券あり
-      numbering: { prefix: "No.", digits: 4, orientation: "horizontal" },
+      numbering: { prefix: "No.", digits: 4, stubOrientation: "horizontal", mainOrientation: "horizontal" },
       sheet, // A4縦・余白10mm・破線ガイド
       startNumber: 1,
       endNumber: 40,
@@ -85,7 +85,7 @@ describe("generateTicketsPdf(統合)", () => {
         illustration: { kind: "none" },
       },
       ticket: { ...d.ticket, stubEnabled: false },
-      numbering: { prefix: "No.", digits: 5, orientation: "horizontal" },
+      numbering: { prefix: "No.", digits: 5, stubOrientation: "horizontal", mainOrientation: "horizontal" },
       sheet: { ...d.sheet, paper: "B5", orientation: "landscape", cutGuide: "crop" },
       startNumber: 990,
       endNumber: 1005,

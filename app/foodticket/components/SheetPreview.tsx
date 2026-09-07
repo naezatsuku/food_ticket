@@ -145,7 +145,8 @@ export function SheetPreview({
                     ticket={ticket}
                     product={product}
                     numberText={formatTicketNumber(numbering, n)}
-                    numberOrientation={numbering.orientation}
+                    stubNumberOrientation={numbering.stubOrientation}
+                    mainNumberOrientation={numbering.mainOrientation}
                     scale={scale}
                     fontTick={fontTick}
                   />

@@ -90,7 +90,11 @@ export function TicketApp() {
             dispatch={dispatch}
           />
           <TicketSettingsPanel ticket={state.ticket} dispatch={dispatch} />
-          <NumberingPanel numbering={state.numbering} dispatch={dispatch} />
+          <NumberingPanel
+            numbering={state.numbering}
+            stubEnabled={state.ticket.stubEnabled}
+            dispatch={dispatch}
+          />
           <SheetSettingsPanel ticket={state.ticket} sheet={state.sheet} dispatch={dispatch} />
           <PrintPanel
             state={state}

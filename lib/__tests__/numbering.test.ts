@@ -3,18 +3,18 @@ import { countInRange, formatTicketNumber, numbersForSheet, validateRange } from
 
 describe("formatTicketNumber", () => {
   it("4桁ゼロ埋め", () => {
-    expect(formatTicketNumber({ prefix: "No.", digits: 4, orientation: "horizontal" }, 1)).toBe("No.0001");
+    expect(formatTicketNumber({ prefix: "No.", digits: 4, stubOrientation: "horizontal", mainOrientation: "horizontal" }, 1)).toBe("No.0001");
   });
   it("3桁・5桁", () => {
-    expect(formatTicketNumber({ prefix: "No.", digits: 3, orientation: "horizontal" }, 42)).toBe("No.042");
-    expect(formatTicketNumber({ prefix: "No.", digits: 5, orientation: "horizontal" }, 42)).toBe("No.00042");
+    expect(formatTicketNumber({ prefix: "No.", digits: 3, stubOrientation: "horizontal", mainOrientation: "horizontal" }, 42)).toBe("No.042");
+    expect(formatTicketNumber({ prefix: "No.", digits: 5, stubOrientation: "horizontal", mainOrientation: "horizontal" }, 42)).toBe("No.00042");
   });
   it("プレフィックス自由入力", () => {
-    expect(formatTicketNumber({ prefix: "#", digits: 4, orientation: "horizontal" }, 7)).toBe("#0007");
-    expect(formatTicketNumber({ prefix: "", digits: 3, orientation: "horizontal" }, 7)).toBe("007");
+    expect(formatTicketNumber({ prefix: "#", digits: 4, stubOrientation: "horizontal", mainOrientation: "horizontal" }, 7)).toBe("#0007");
+    expect(formatTicketNumber({ prefix: "", digits: 3, stubOrientation: "horizontal", mainOrientation: "horizontal" }, 7)).toBe("007");
   });
   it("桁あふれは切り捨てず全桁表示", () => {
-    expect(formatTicketNumber({ prefix: "No.", digits: 3, orientation: "horizontal" }, 1234)).toBe("No.1234");
+    expect(formatTicketNumber({ prefix: "No.", digits: 3, stubOrientation: "horizontal", mainOrientation: "horizontal" }, 1234)).toBe("No.1234");
   });
 });
 

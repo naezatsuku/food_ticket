@@ -242,7 +242,8 @@ export async function generateTicketsPdf(input: PdfJobInput): Promise<PdfJobResu
           priceText,
           numberText: formatTicketNumber(numbering, n),
           illustration: product.illustration,
-          numberOrientation: numbering.orientation,
+          stubNumberOrientation: numbering.stubOrientation,
+          mainNumberOrientation: numbering.mainOrientation,
         },
         measure
       );

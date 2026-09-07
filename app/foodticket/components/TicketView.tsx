@@ -18,14 +18,16 @@ export function TicketView({
   ticket,
   product,
   numberText,
-  numberOrientation,
+  stubNumberOrientation,
+  mainNumberOrientation,
   scale,
   fontTick,
 }: {
   ticket: TicketSettings;
   product: Product;
   numberText: string;
-  numberOrientation: "horizontal" | "vertical";
+  stubNumberOrientation: "horizontal" | "vertical";
+  mainNumberOrientation: "horizontal" | "vertical";
   scale: number;
   fontTick: number;
 }) {
@@ -38,13 +40,23 @@ export function TicketView({
           priceText: formatPrice(product.price),
           numberText,
           illustration: product.illustration,
-          numberOrientation,
+          stubNumberOrientation,
+          mainNumberOrientation,
         },
         measure
       ),
     // fontTick はフォントロード後の再計測トリガー
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ticket, product.name, product.price, product.illustration, numberText, numberOrientation, fontTick]
+    [
+      ticket,
+      product.name,
+      product.price,
+      product.illustration,
+      numberText,
+      stubNumberOrientation,
+      mainNumberOrientation,
+      fontTick,
+    ]
   );
   const px = (mm: number) => mm * scale;
 

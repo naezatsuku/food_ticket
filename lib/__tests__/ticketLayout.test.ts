@@ -182,7 +182,7 @@ describe("computeTicketLayout", () => {
     it("horizontal を明示しても回転しない", () => {
       const layout = computeTicketLayout(
         baseTicket,
-        { ...content, numberOrientation: "horizontal" },
+        { ...content, mainNumberOrientation: "horizontal" },
         fakeMeasure
       );
       const numberEl = layout.texts.find((t) => t.text === "No.0001");
@@ -192,7 +192,7 @@ describe("computeTicketLayout", () => {
     it("vertical を指定すると番号が回転する", () => {
       const layout = computeTicketLayout(
         baseTicket,
-        { ...content, numberOrientation: "vertical" },
+        { ...content, mainNumberOrientation: "vertical" },
         fakeMeasure
       );
       const numberEl = layout.texts.find((t) => t.text === "No.0001");
@@ -202,7 +202,7 @@ describe("computeTicketLayout", () => {
     it("回転後の外接矩形(横=フォントサイズ、縦=文字列の長さ)が券内に収まる", () => {
       const layout = computeTicketLayout(
         baseTicket,
-        { ...content, numberOrientation: "vertical" },
+        { ...content, mainNumberOrientation: "vertical" },
         fakeMeasure
       );
       const numberEl = layout.texts.find((t) => t.rotated)!;
@@ -213,7 +213,7 @@ describe("computeTicketLayout", () => {
     it("商品名・値段は縦書き番号の右側から始まり、重ならない", () => {
       const layout = computeTicketLayout(
         baseTicket,
-        { ...content, numberOrientation: "vertical" },
+        { ...content, mainNumberOrientation: "vertical" },
         fakeMeasure
       );
       const numberEl = layout.texts.find((t) => t.rotated)!;
@@ -224,10 +224,10 @@ describe("computeTicketLayout", () => {
       }
     });
 
-    it("半券ありでも両側の番号がそれぞれ回転する", () => {
+    it("半券・本券の両方に vertical を指定すると両側とも回転する", () => {
       const layout = computeTicketLayout(
         { ...baseTicket, stubEnabled: true },
-        { ...content, numberOrientation: "vertical" },
+        { ...content, stubNumberOrientation: "vertical", mainNumberOrientation: "vertical" },
         fakeMeasure
       );
       const numbers = layout.texts.filter((t) => t.text === "No.0001");
@@ -235,11 +235,43 @@ describe("computeTicketLayout", () => {
       expect(numbers.every((t) => t.rotated)).toBe(true);
     });
 
+    it("半券側だけ縦書き・本券側は横書き、を独立して指定できる", () => {
+      const layout = computeTicketLayout(
+        { ...baseTicket, stubEnabled: true },
+        { ...content, stubNumberOrientation: "vertical", mainNumberOrientation: "horizontal" },
+        fakeMeasure
+      );
+      const numbers = layout.texts.filter((t) => t.text === "No.0001");
+      expect(numbers).toHaveLength(2);
+      // 半券側(x < 半券幅)は回転、本券側(x > 半券幅)は回転しない
+      const stubNumber = numbers.find((t) => t.xMm < 25)!;
+      const mainNumber = numbers.find((t) => t.xMm > 25)!;
+      expect(stubNumber.rotated).toBe(true);
+      expect(mainNumber.rotated).toBeFalsy();
+    });
+
+    it("本券側だけ縦書き・半券側は横書き、を独立して指定できる(逆パターン)", () => {
+      const layout = computeTicketLayout(
+        { ...baseTicket, stubEnabled: true },
+        { ...content, stubNumberOrientation: "horizontal", mainNumberOrientation: "vertical" },
+        fakeMeasure
+      );
+      const numbers = layout.texts.filter((t) => t.text === "No.0001");
+      const stubNumber = numbers.find((t) => t.xMm < 25)!;
+      const mainNumber = numbers.find((t) => t.xMm > 25)!;
+      expect(stubNumber.rotated).toBeFalsy();
+      expect(mainNumber.rotated).toBe(true);
+    });
+
     it("縦書きでもクラッシュしない(小さい券・長い商品名)", () => {
       expect(() =>
         computeTicketLayout(
           { ...baseTicket, heightMm: 15 },
-          { ...content, numberOrientation: "vertical", name: "スペシャルもりもり特製カレーライス大盛り" },
+          {
+            ...content,
+            mainNumberOrientation: "vertical",
+            name: "スペシャルもりもり特製カレーライス大盛り",
+          },
           fakeMeasure
         )
       ).not.toThrow();

@@ -138,8 +138,10 @@ export interface TicketContent {
   priceText: string;
   numberText: string;
   illustration: Illustration;
-  /** 通し番号の向き。省略時は "horizontal"(長辺に平行、従来どおり) */
-  numberOrientation?: "horizontal" | "vertical";
+  /** 半券側の通し番号の向き。省略時は "horizontal"(長辺に平行、従来どおり) */
+  stubNumberOrientation?: "horizontal" | "vertical";
+  /** 本券側の通し番号の向き。省略時は "horizontal"(長辺に平行、従来どおり) */
+  mainNumberOrientation?: "horizontal" | "vertical";
 }
 
 const PAD = 3; // 券内の基本パディング(mm)
@@ -208,7 +210,8 @@ export function computeTicketLayout(
   const stub = ticket.stubEnabled;
   const stubW = stub ? ticket.stubWidthMm : 0;
   const perforationX = stub ? stubW : null;
-  const numberOrientation = content.numberOrientation ?? "horizontal";
+  const stubNumberOrientation = content.stubNumberOrientation ?? "horizontal";
+  const mainNumberOrientation = content.mainNumberOrientation ?? "horizontal";
 
   // ---- 半券(左側) ----
   if (stub) {
@@ -220,7 +223,7 @@ export function computeTicketLayout(
       PAD,
       stubInnerW,
       contentBottom - PAD,
-      numberOrientation
+      stubNumberOrientation
     );
     texts.push(stubPlacement.text);
     if (content.name) {
@@ -263,7 +266,7 @@ export function computeTicketLayout(
     PAD,
     mainX1 - mainX0Base - PAD,
     contentBottom - PAD,
-    numberOrientation
+    mainNumberOrientation
   );
   // 番号が縦書きなら横方向に、横書きなら縦方向にスペースを消費する
   const mainX0 = mainX0Base + mainPlacement.widthUsed + (mainPlacement.widthUsed > 0 ? MIN_SPACING : 0);

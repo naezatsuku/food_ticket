@@ -72,9 +72,11 @@ export function TicketSettingsPanel({
 
 export function NumberingPanel({
   numbering,
+  stubEnabled,
   dispatch,
 }: {
   numbering: NumberingSettings;
+  stubEnabled: boolean;
   dispatch: Dispatch<Action>;
 }) {
   return (
@@ -108,15 +110,43 @@ export function NumberingPanel({
           </select>
         </Field>
       </div>
-      <Field label="番号の向き">
+      {stubEnabled && (
+        <Field label="番号の向き(半券側)">
+          <div className="flex gap-4 text-sm">
+            <label className="flex items-center gap-1">
+              <input
+                type="radio"
+                name="numbering-stub-orientation"
+                checked={numbering.stubOrientation === "horizontal"}
+                onChange={() =>
+                  dispatch({ type: "numbering/set", patch: { stubOrientation: "horizontal" } })
+                }
+              />
+              長辺に平行(従来どおり)
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="radio"
+                name="numbering-stub-orientation"
+                checked={numbering.stubOrientation === "vertical"}
+                onChange={() =>
+                  dispatch({ type: "numbering/set", patch: { stubOrientation: "vertical" } })
+                }
+              />
+              短辺に平行(90度回転)
+            </label>
+          </div>
+        </Field>
+      )}
+      <Field label={stubEnabled ? "番号の向き(本券側)" : "番号の向き"}>
         <div className="flex gap-4 text-sm">
           <label className="flex items-center gap-1">
             <input
               type="radio"
-              name="numbering-orientation"
-              checked={numbering.orientation === "horizontal"}
+              name="numbering-main-orientation"
+              checked={numbering.mainOrientation === "horizontal"}
               onChange={() =>
-                dispatch({ type: "numbering/set", patch: { orientation: "horizontal" } })
+                dispatch({ type: "numbering/set", patch: { mainOrientation: "horizontal" } })
               }
             />
             長辺に平行(従来どおり)
@@ -124,10 +154,10 @@ export function NumberingPanel({
           <label className="flex items-center gap-1">
             <input
               type="radio"
-              name="numbering-orientation"
-              checked={numbering.orientation === "vertical"}
+              name="numbering-main-orientation"
+              checked={numbering.mainOrientation === "vertical"}
               onChange={() =>
-                dispatch({ type: "numbering/set", patch: { orientation: "vertical" } })
+                dispatch({ type: "numbering/set", patch: { mainOrientation: "vertical" } })
               }
             />
             短辺に平行(90度回転)

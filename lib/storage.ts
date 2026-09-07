@@ -1,7 +1,26 @@
-import type { AppState } from "./types";
+import type { AppState, NumberingSettings } from "./types";
 import { defaultAppState } from "./types";
 
 const STORAGE_KEY = "food-ticket-app-v1";
+
+/**
+ * 通し番号の設定を正規化する。旧バージョンでは向きが半券・本券で共通の
+ * 単一フィールド(orientation)だったため、そちらしか無いデータは
+ * 両方の新フィールド(stubOrientation / mainOrientation)へ引き継ぐ。
+ */
+function normalizeNumbering(
+  defaults: NumberingSettings,
+  raw: Partial<NumberingSettings> | undefined
+): NumberingSettings {
+  const r = (raw ?? {}) as Partial<NumberingSettings> & { orientation?: NumberingSettings["stubOrientation"] };
+  const legacyOrientation = r.orientation;
+  return {
+    ...defaults,
+    ...r,
+    stubOrientation: r.stubOrientation ?? legacyOrientation ?? defaults.stubOrientation,
+    mainOrientation: r.mainOrientation ?? legacyOrientation ?? defaults.mainOrientation,
+  };
+}
 
 /** 不明な形の入力をデフォルト状態にマージして AppState に正規化する */
 function normalize(raw: unknown): AppState {
@@ -26,7 +45,7 @@ function normalize(raw: unknown): AppState {
         typeof p.nextNumber === "number" && p.nextNumber >= 1 ? Math.trunc(p.nextNumber) : 1,
     })),
     ticket: { ...d.ticket, ...(r.ticket ?? {}) },
-    numbering: { ...d.numbering, ...(r.numbering ?? {}) },
+    numbering: normalizeNumbering(d.numbering, r.numbering),
     sheet: { ...d.sheet, ...(r.sheet ?? {}) },
     logs: Array.isArray(r.logs) ? r.logs : [],
     selectedProductId: null,

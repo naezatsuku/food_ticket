@@ -28,14 +28,18 @@ export interface TicketSettings {
   borderWidthMm: number;
 }
 
+export type NumberOrientation = "horizontal" | "vertical";
+
 /** 通し番号の設定 */
 export interface NumberingSettings {
   /** プレフィックス(デフォルト "No.") */
   prefix: string;
   /** ゼロ埋め桁数 */
   digits: 3 | 4 | 5;
-  /** 番号の向き。"horizontal" = 長辺に平行(従来どおり)、"vertical" = 短辺に平行(90度回転) */
-  orientation: "horizontal" | "vertical";
+  /** 半券側の番号の向き。"horizontal" = 長辺に平行(従来どおり)、"vertical" = 短辺に平行(90度回転) */
+  stubOrientation: NumberOrientation;
+  /** 本券側の番号の向き */
+  mainOrientation: NumberOrientation;
 }
 
 export type PaperSize = "A4" | "B5" | "A3";
@@ -99,7 +103,7 @@ export function defaultAppState(): AppState {
   return {
     products: [sample],
     ticket: { widthMm: 49, heightMm: 17, stubEnabled: true, stubWidthMm: 13, borderWidthMm: 0.5 },
-    numbering: { prefix: "No.", digits: 4, orientation: "horizontal" },
+    numbering: { prefix: "No.", digits: 4, stubOrientation: "horizontal", mainOrientation: "horizontal" },
     sheet: {
       paper: "A3",
       orientation: "portrait",
