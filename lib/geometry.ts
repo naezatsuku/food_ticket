@@ -1,4 +1,4 @@
-import type { Orientation, PaperSize, SheetSettings, TicketSettings } from "./types";
+import type { NumberDirection, Orientation, PaperSize, SheetSettings, TicketSettings } from "./types";
 
 /** 1mm = 72/25.4 pt(PDF出力時の換算係数) */
 export const MM_TO_PT = 72 / 25.4;
@@ -89,6 +89,26 @@ export function ticketOrigins(
     }
   }
   return out;
+}
+
+/**
+ * 通し番号を割り当てる順序で、ticketOrigins(行優先)のインデックスを並べ替えて返す。
+ * "row" は現状通り左上から右へ(1,2,3 → 次の行)、"column" は上から下へ(1,2,3 → 次の列)。
+ */
+export function ticketOrder(
+  grid: { rows: number; cols: number },
+  direction: NumberDirection
+): number[] {
+  if (direction === "row") {
+    return [...Array(grid.rows * grid.cols)].map((_, i) => i);
+  }
+  const order: number[] = [];
+  for (let c = 0; c < grid.cols; c++) {
+    for (let r = 0; r < grid.rows; r++) {
+      order.push(r * grid.cols + c);
+    }
+  }
+  return order;
 }
 
 function dedupeSorted(values: number[]): number[] {

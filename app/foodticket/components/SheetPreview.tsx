@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { columnEdges, resolveGrid, rowEdges, sheetSizeMm, ticketOrigins, validateLayout } from "@/lib/geometry";
+import {
+  columnEdges,
+  resolveGrid,
+  rowEdges,
+  sheetSizeMm,
+  ticketOrder,
+  ticketOrigins,
+  validateLayout,
+} from "@/lib/geometry";
 import { formatTicketNumber, numbersForSheet } from "@/lib/numbering";
 import type { AppState, Product } from "@/lib/types";
 import { TicketView } from "./TicketView";
@@ -48,6 +56,7 @@ export function SheetPreview({
   const px = (mm: number) => mm * scale;
 
   const origins = ticketOrigins(grid, ticket.widthMm, ticket.heightMm, sheet.gapMm);
+  const order = ticketOrder(grid, sheet.numberDirection);
   const numbers =
     perSheet > 0 && endNumber >= startNumber
       ? numbersForSheet(startNumber, endNumber, perSheet, 0)
@@ -139,7 +148,7 @@ export function SheetPreview({
                 <div
                   key={n}
                   className="absolute"
-                  style={{ left: px(origins[i].x), top: px(origins[i].y) }}
+                  style={{ left: px(origins[order[i]].x), top: px(origins[order[i]].y) }}
                 >
                   <TicketView
                     ticket={ticket}

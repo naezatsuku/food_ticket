@@ -5,6 +5,7 @@ import { autoGrid, sheetSizeMm } from "@/lib/geometry";
 import type { Action } from "@/lib/state";
 import type {
   CutGuideStyle,
+  NumberDirection,
   NumberingSettings,
   Orientation,
   PaperSize,
@@ -242,6 +243,21 @@ export function SheetSettingsPanel({
             <option value="dashed">破線(境界全体)</option>
             <option value="crop">トンボ(交点のみ)</option>
             <option value="none">なし</option>
+          </select>
+        </Field>
+        <Field label="番号の並び順">
+          <select
+            className={inputClass}
+            value={sheet.numberDirection}
+            onChange={(e) =>
+              dispatch({
+                type: "sheet/set",
+                patch: { numberDirection: e.target.value as NumberDirection },
+              })
+            }
+          >
+            <option value="row">横方向(0001,0002,0003…→次の行)</option>
+            <option value="column">縦方向(0001,0002,0003…→次の列)</option>
           </select>
         </Field>
       </div>

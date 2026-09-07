@@ -6,6 +6,7 @@ import {
   rowEdges,
   sheetSizeMm,
   sheetsNeeded,
+  ticketOrder,
   ticketOrigins,
   validateLayout,
 } from "../geometry";
@@ -26,6 +27,7 @@ const a4Sheet: SheetSettings = {
   gapMm: 0,
   cutGuide: "dashed",
   manualGrid: null,
+  numberDirection: "row",
 };
 
 describe("sheetSizeMm", () => {
@@ -111,6 +113,19 @@ describe("columnEdges / rowEdges", () => {
   it("rowEdgesも同様", () => {
     const grid = { rows: 2, cols: 1, originX: 0, originY: 0 };
     expect(rowEdges(grid, 30, 5)).toEqual([0, 30, 35, 65]);
+  });
+});
+
+describe("ticketOrder", () => {
+  it("行方向(row)は左上から番号順そのまま(1,2,3→次の行)", () => {
+    const grid = resolveGrid(ticket90x50, a4Sheet); // 5行×2列
+    expect(ticketOrder(grid, "row")).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it("縦方向(column)は列優先(1,2,3…→次の列)", () => {
+    const grid = resolveGrid(ticket90x50, a4Sheet); // 5行×2列
+    // セルインデックス = r*cols + c。1列目(c=0)を上から下、続けて2列目(c=1)
+    expect(ticketOrder(grid, "column")).toEqual([0, 2, 4, 6, 8, 1, 3, 5, 7, 9]);
   });
 });
 
