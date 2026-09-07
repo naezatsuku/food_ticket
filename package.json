@@ -11,18 +11,23 @@
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
+    "encoding-japanese": "^2.2.0",
     "next": "16.2.10",
     "pdf-lib": "^1.17.1",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/encoding-japanese": "^2.2.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "fake-indexeddb": "^6.2.5",
+    "happy-dom": "^20.12.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"

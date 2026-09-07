@@ -24,7 +24,11 @@ export interface TicketSettings {
   stubEnabled: boolean;
   /** 半券の幅(mm)。stubEnabled 時のみ有効 */
   stubWidthMm: number;
+  /** 枠線・ミシン目の太さ(mm) */
+  borderWidthMm: number;
 }
+
+export type NumberOrientation = "horizontal" | "vertical";
 
 /** 通し番号の設定 */
 export interface NumberingSettings {
@@ -32,6 +36,10 @@ export interface NumberingSettings {
   prefix: string;
   /** ゼロ埋め桁数 */
   digits: 3 | 4 | 5;
+  /** 半券側の番号の向き。"horizontal" = 長辺に平行(従来どおり)、"vertical" = 短辺に平行(90度回転) */
+  stubOrientation: NumberOrientation;
+  /** 本券側の番号の向き */
+  mainOrientation: NumberOrientation;
 }
 
 export type PaperSize = "A4" | "B5" | "A3";
@@ -46,6 +54,8 @@ export interface SheetSettings {
   orientation: Orientation;
   /** 余白(mm) */
   marginMm: number;
+  /** 券同士の間隔(mm)。0 = 隣接(従来どおり辺を共有) */
+  gapMm: number;
   cutGuide: CutGuideStyle;
   /** 手動の行×列指定。null なら自動計算 */
   manualGrid: { rows: number; cols: number } | null;
@@ -96,12 +106,13 @@ export function defaultAppState(): AppState {
   });
   return {
     products: [sample],
-    ticket: { widthMm: 49, heightMm: 17, stubEnabled: true, stubWidthMm: 13 },
-    numbering: { prefix: "No.", digits: 4 },
+    ticket: { widthMm: 49, heightMm: 17, stubEnabled: true, stubWidthMm: 13, borderWidthMm: 0.5 },
+    numbering: { prefix: "No.", digits: 4, stubOrientation: "horizontal", mainOrientation: "horizontal" },
     sheet: {
       paper: "A3",
       orientation: "portrait",
       marginMm: 0,
+      gapMm: 0,
       cutGuide: "dashed",
       manualGrid: null,
       numberDirection: "row",

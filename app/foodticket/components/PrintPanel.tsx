@@ -6,7 +6,7 @@ import { countInRange, formatTicketNumber, validateRange } from "@/lib/numbering
 import { downloadPdf, generateTicketsPdf } from "@/lib/pdf";
 import type { Action } from "@/lib/state";
 import type { AppState, Product } from "@/lib/types";
-import { Button, ErrorList, Field, Modal, NumberInput, Section } from "./ui";
+import { Button, ErrorList, Field, Modal, NumberInput, Section } from "@/app/components/ui";
 
 const PAPER_LABEL = { A4: "A4", B5: "B5", A3: "A3" } as const;
 

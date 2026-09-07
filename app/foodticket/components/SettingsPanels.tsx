@@ -12,7 +12,7 @@ import type {
   SheetSettings,
   TicketSettings,
 } from "@/lib/types";
-import { Field, inputClass, NumberInput, Section } from "./ui";
+import { Field, inputClass, NumberInput, Section } from "@/app/components/ui";
 
 export function TicketSettingsPanel({
   ticket,
@@ -36,6 +36,14 @@ export function TicketSettingsPanel({
             value={ticket.heightMm}
             min={15}
             onChange={(n) => dispatch({ type: "ticket/set", patch: { heightMm: n } })}
+          />
+        </Field>
+        <Field label="枠線の太さ(mm)">
+          <NumberInput
+            value={ticket.borderWidthMm}
+            min={0.1}
+            step={0.1}
+            onChange={(n) => dispatch({ type: "ticket/set", patch: { borderWidthMm: n } })}
           />
         </Field>
       </div>
@@ -65,9 +73,11 @@ export function TicketSettingsPanel({
 
 export function NumberingPanel({
   numbering,
+  stubEnabled,
   dispatch,
 }: {
   numbering: NumberingSettings;
+  stubEnabled: boolean;
   dispatch: Dispatch<Action>;
 }) {
   return (
@@ -101,6 +111,60 @@ export function NumberingPanel({
           </select>
         </Field>
       </div>
+      {stubEnabled && (
+        <Field label="番号の向き(半券側)">
+          <div className="flex gap-4 text-sm">
+            <label className="flex items-center gap-1">
+              <input
+                type="radio"
+                name="numbering-stub-orientation"
+                checked={numbering.stubOrientation === "horizontal"}
+                onChange={() =>
+                  dispatch({ type: "numbering/set", patch: { stubOrientation: "horizontal" } })
+                }
+              />
+              長辺に平行(従来どおり)
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="radio"
+                name="numbering-stub-orientation"
+                checked={numbering.stubOrientation === "vertical"}
+                onChange={() =>
+                  dispatch({ type: "numbering/set", patch: { stubOrientation: "vertical" } })
+                }
+              />
+              短辺に平行(90度回転)
+            </label>
+          </div>
+        </Field>
+      )}
+      <Field label={stubEnabled ? "番号の向き(本券側)" : "番号の向き"}>
+        <div className="flex gap-4 text-sm">
+          <label className="flex items-center gap-1">
+            <input
+              type="radio"
+              name="numbering-main-orientation"
+              checked={numbering.mainOrientation === "horizontal"}
+              onChange={() =>
+                dispatch({ type: "numbering/set", patch: { mainOrientation: "horizontal" } })
+              }
+            />
+            長辺に平行(従来どおり)
+          </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="radio"
+              name="numbering-main-orientation"
+              checked={numbering.mainOrientation === "vertical"}
+              onChange={() =>
+                dispatch({ type: "numbering/set", patch: { mainOrientation: "vertical" } })
+              }
+            />
+            短辺に平行(90度回転)
+          </label>
+        </div>
+      </Field>
       <p className="text-xs text-slate-400">
         連番は商品ごとに独立しています。開始番号は「PDF出力」で指定します。
       </p>
@@ -118,7 +182,7 @@ export function SheetSettingsPanel({
   dispatch: Dispatch<Action>;
 }) {
   const { w, h } = sheetSizeMm(sheet.paper, sheet.orientation);
-  const auto = autoGrid(w, h, sheet.marginMm, ticket.widthMm, ticket.heightMm);
+  const auto = autoGrid(w, h, sheet.marginMm, ticket.widthMm, ticket.heightMm, sheet.gapMm);
 
   return (
     <Section title="用紙・シートレイアウト">
@@ -156,6 +220,13 @@ export function SheetSettingsPanel({
             value={sheet.marginMm}
             min={0}
             onChange={(n) => dispatch({ type: "sheet/set", patch: { marginMm: n } })}
+          />
+        </Field>
+        <Field label="券の間隔(mm)">
+          <NumberInput
+            value={sheet.gapMm}
+            min={0}
+            onChange={(n) => dispatch({ type: "sheet/set", patch: { gapMm: n } })}
           />
         </Field>
         <Field label="切り取りガイド">

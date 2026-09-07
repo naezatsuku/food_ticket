@@ -18,6 +18,7 @@ const baseTicket: TicketSettings = {
   heightMm: 50,
   stubEnabled: false,
   stubWidthMm: 25,
+  borderWidthMm: 0.5,
 };
 
 describe("fitFontSize", () => {
@@ -169,5 +170,111 @@ describe("computeTicketLayout", () => {
     expect(() =>
       computeTicketLayout({ ...baseTicket, heightMm: 15 }, content, fakeMeasure)
     ).not.toThrow();
+  });
+
+  describe("通し番号の向き", () => {
+    it("既定(未指定)では番号は回転しない", () => {
+      const layout = computeTicketLayout(baseTicket, content, fakeMeasure);
+      const numberEl = layout.texts.find((t) => t.text === "No.0001");
+      expect(numberEl?.rotated).toBeFalsy();
+    });
+
+    it("horizontal を明示しても回転しない", () => {
+      const layout = computeTicketLayout(
+        baseTicket,
+        { ...content, mainNumberOrientation: "horizontal" },
+        fakeMeasure
+      );
+      const numberEl = layout.texts.find((t) => t.text === "No.0001");
+      expect(numberEl?.rotated).toBeFalsy();
+    });
+
+    it("vertical を指定すると番号が回転する", () => {
+      const layout = computeTicketLayout(
+        baseTicket,
+        { ...content, mainNumberOrientation: "vertical" },
+        fakeMeasure
+      );
+      const numberEl = layout.texts.find((t) => t.text === "No.0001");
+      expect(numberEl?.rotated).toBe(true);
+    });
+
+    it("回転後の外接矩形(横=フォントサイズ、縦=文字列の長さ)が券内に収まる", () => {
+      const layout = computeTicketLayout(
+        baseTicket,
+        { ...content, mainNumberOrientation: "vertical" },
+        fakeMeasure
+      );
+      const numberEl = layout.texts.find((t) => t.rotated)!;
+      expect(numberEl.xMm + numberEl.sizeMm).toBeLessThanOrEqual(90);
+      expect(numberEl.yTopMm + fakeMeasure(numberEl.text, numberEl.sizeMm)).toBeLessThanOrEqual(50);
+    });
+
+    it("商品名・値段は縦書き番号の右側から始まり、重ならない", () => {
+      const layout = computeTicketLayout(
+        baseTicket,
+        { ...content, mainNumberOrientation: "vertical" },
+        fakeMeasure
+      );
+      const numberEl = layout.texts.find((t) => t.rotated)!;
+      const others = layout.texts.filter((t) => !t.rotated);
+      expect(others.length).toBeGreaterThan(0);
+      for (const t of others) {
+        expect(t.xMm).toBeGreaterThanOrEqual(numberEl.xMm + numberEl.sizeMm);
+      }
+    });
+
+    it("半券・本券の両方に vertical を指定すると両側とも回転する", () => {
+      const layout = computeTicketLayout(
+        { ...baseTicket, stubEnabled: true },
+        { ...content, stubNumberOrientation: "vertical", mainNumberOrientation: "vertical" },
+        fakeMeasure
+      );
+      const numbers = layout.texts.filter((t) => t.text === "No.0001");
+      expect(numbers).toHaveLength(2);
+      expect(numbers.every((t) => t.rotated)).toBe(true);
+    });
+
+    it("半券側だけ縦書き・本券側は横書き、を独立して指定できる", () => {
+      const layout = computeTicketLayout(
+        { ...baseTicket, stubEnabled: true },
+        { ...content, stubNumberOrientation: "vertical", mainNumberOrientation: "horizontal" },
+        fakeMeasure
+      );
+      const numbers = layout.texts.filter((t) => t.text === "No.0001");
+      expect(numbers).toHaveLength(2);
+      // 半券側(x < 半券幅)は回転、本券側(x > 半券幅)は回転しない
+      const stubNumber = numbers.find((t) => t.xMm < 25)!;
+      const mainNumber = numbers.find((t) => t.xMm > 25)!;
+      expect(stubNumber.rotated).toBe(true);
+      expect(mainNumber.rotated).toBeFalsy();
+    });
+
+    it("本券側だけ縦書き・半券側は横書き、を独立して指定できる(逆パターン)", () => {
+      const layout = computeTicketLayout(
+        { ...baseTicket, stubEnabled: true },
+        { ...content, stubNumberOrientation: "horizontal", mainNumberOrientation: "vertical" },
+        fakeMeasure
+      );
+      const numbers = layout.texts.filter((t) => t.text === "No.0001");
+      const stubNumber = numbers.find((t) => t.xMm < 25)!;
+      const mainNumber = numbers.find((t) => t.xMm > 25)!;
+      expect(stubNumber.rotated).toBeFalsy();
+      expect(mainNumber.rotated).toBe(true);
+    });
+
+    it("縦書きでもクラッシュしない(小さい券・長い商品名)", () => {
+      expect(() =>
+        computeTicketLayout(
+          { ...baseTicket, heightMm: 15 },
+          {
+            ...content,
+            mainNumberOrientation: "vertical",
+            name: "スペシャルもりもり特製カレーライス大盛り",
+          },
+          fakeMeasure
+        )
+      ).not.toThrow();
+    });
   });
 });

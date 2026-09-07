@@ -1,0 +1,276 @@
+import { generateSlots } from "./slots";
+import { createRole, createTimeSlot } from "./types";
+import { setRequirement } from "./roles";
+import type {
+  Assignment,
+  BreakPeriod,
+  Person,
+  Role,
+  ShiftProject,
+  SlotGenerationSettings,
+  TimeSlot,
+} from "./types";
+
+export type Action =
+  | { type: "project/rename"; name: string }
+  | { type: "project/setDefaultMaxSlots"; value: number }
+  | { type: "slotGeneration/set"; patch: Partial<SlotGenerationSettings> }
+  | { type: "slotGeneration/addBreak" }
+  | { type: "slotGeneration/updateBreak"; index: number; patch: Partial<BreakPeriod> }
+  | { type: "slotGeneration/removeBreak"; index: number }
+  | { type: "slotGeneration/apply" }
+  | { type: "slot/add" }
+  | { type: "slot/update"; id: string; patch: Partial<TimeSlot> }
+  | { type: "slot/remove"; id: string }
+  | { type: "slot/removeByDate"; date: string }
+  | { type: "role/add" }
+  | { type: "role/update"; id: string; patch: Partial<Pick<Role, "name" | "colorHex">> }
+  | { type: "role/remove"; id: string }
+  | { type: "requirement/set"; roleId: string; slotId: string; patch: { min?: number; max?: number } }
+  | { type: "requirement/bulkApply"; roleId: string; min: number; max: number; dateFilter?: string }
+  | { type: "people/replace"; people: Person[] }
+  | { type: "people/update"; id: string; patch: Partial<Person> }
+  | { type: "people/remove"; id: string }
+  | { type: "people/clear" }
+  | { type: "assignments/replace"; assignments: Assignment[] }
+  | { type: "assignments/place"; slotId: string; roleId: string; personId: string }
+  | { type: "assignments/remove"; slotId: string; roleId: string; personId: string }
+  | { type: "assignments/swap"; a: AssignmentKey; b: AssignmentKey }
+  | { type: "assignments/toggleLock"; slotId: string; roleId: string; personId: string }
+  | { type: "state/replace"; project: ShiftProject };
+
+export interface AssignmentKey {
+  slotId: string;
+  roleId: string;
+  personId: string;
+}
+
+function sameAssignment(a: Assignment, key: AssignmentKey): boolean {
+  return a.slotId === key.slotId && a.roleId === key.roleId && a.personId === key.personId;
+}
+
+/** 存在しなくなった枠IDへの必要人数設定を取り除く */
+function pruneRequirements(roles: Role[], validSlotIds: Set<string>): Role[] {
+  return roles.map((r) => ({
+    ...r,
+    requirement: r.requirement.filter((req) => validSlotIds.has(req.slotId)),
+  }));
+}
+
+/** 削除された枠・役割・人を参照する割当を取り除く */
+function pruneAssignments(
+  assignments: Assignment[],
+  validSlotIds: Set<string>,
+  validRoleIds: Set<string>,
+  validPersonIds: Set<string>
+): Assignment[] {
+  return assignments.filter(
+    (a) => validSlotIds.has(a.slotId) && validRoleIds.has(a.roleId) && validPersonIds.has(a.personId)
+  );
+}
+
+export function reducer(state: ShiftProject, action: Action): ShiftProject {
+  switch (action.type) {
+    case "project/rename":
+      return { ...state, name: action.name };
+    case "project/setDefaultMaxSlots":
+      return { ...state, defaultMaxSlotsPerPerson: action.value };
+
+    case "slotGeneration/set":
+      return { ...state, slotGeneration: { ...state.slotGeneration, ...action.patch } };
+    case "slotGeneration/addBreak":
+      return {
+        ...state,
+        slotGeneration: {
+          ...state.slotGeneration,
+          breaks: [...state.slotGeneration.breaks, { start: "12:00", end: "13:00" }],
+        },
+      };
+    case "slotGeneration/updateBreak":
+      return {
+        ...state,
+        slotGeneration: {
+          ...state.slotGeneration,
+          breaks: state.slotGeneration.breaks.map((b, i) =>
+            i === action.index ? { ...b, ...action.patch } : b
+          ),
+        },
+      };
+    case "slotGeneration/removeBreak":
+      return {
+        ...state,
+        slotGeneration: {
+          ...state.slotGeneration,
+          breaks: state.slotGeneration.breaks.filter((_, i) => i !== action.index),
+        },
+      };
+    case "slotGeneration/apply": {
+      // 「生成」は対象日1日分だけを作り直す操作。他の日付の枠はそのまま残す(複数日対応)。
+      const newSlotsForDate = generateSlots(state.slotGeneration);
+      const keptSlots = state.slots.filter((s) => s.date !== state.slotGeneration.date);
+      const slots = [...keptSlots, ...newSlotsForDate].sort(
+        (a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start)
+      );
+      const validSlotIds = new Set(slots.map((s) => s.id));
+      const roles = pruneRequirements(state.roles, validSlotIds);
+      const assignments = pruneAssignments(
+        state.assignments,
+        validSlotIds,
+        new Set(roles.map((r) => r.id)),
+        new Set(state.people.map((p) => p.id))
+      );
+      return { ...state, slots, roles, assignments };
+    }
+
+    case "slot/add": {
+      const last = state.slots[state.slots.length - 1];
+      const date = state.slotGeneration.date || last?.date || "";
+      const slot = last
+        ? createTimeSlot({ date, start: last.end, end: last.end })
+        : createTimeSlot({ date });
+      return { ...state, slots: [...state.slots, slot] };
+    }
+    case "slot/update":
+      return {
+        ...state,
+        slots: state.slots.map((s) => (s.id === action.id ? { ...s, ...action.patch } : s)),
+      };
+    case "slot/remove": {
+      const slots = state.slots.filter((s) => s.id !== action.id);
+      const validSlotIds = new Set(slots.map((s) => s.id));
+      const roles = pruneRequirements(state.roles, validSlotIds);
+      const assignments = pruneAssignments(
+        state.assignments,
+        validSlotIds,
+        new Set(roles.map((r) => r.id)),
+        new Set(state.people.map((p) => p.id))
+      );
+      return { ...state, slots, roles, assignments };
+    }
+    case "slot/removeByDate": {
+      const slots = state.slots.filter((s) => s.date !== action.date);
+      const validSlotIds = new Set(slots.map((s) => s.id));
+      const roles = pruneRequirements(state.roles, validSlotIds);
+      const assignments = pruneAssignments(
+        state.assignments,
+        validSlotIds,
+        new Set(roles.map((r) => r.id)),
+        new Set(state.people.map((p) => p.id))
+      );
+      return { ...state, slots, roles, assignments };
+    }
+
+    case "role/add":
+      return { ...state, roles: [...state.roles, createRole(undefined, state.roles.length)] };
+    case "role/update":
+      return {
+        ...state,
+        roles: state.roles.map((r) => (r.id === action.id ? { ...r, ...action.patch } : r)),
+      };
+    case "role/remove": {
+      const roles = state.roles.filter((r) => r.id !== action.id);
+      const assignments = pruneAssignments(
+        state.assignments,
+        new Set(state.slots.map((s) => s.id)),
+        new Set(roles.map((r) => r.id)),
+        new Set(state.people.map((p) => p.id))
+      );
+      return { ...state, roles, assignments };
+    }
+
+    case "requirement/set":
+      return {
+        ...state,
+        roles: state.roles.map((r) =>
+          r.id === action.roleId ? setRequirement(r, action.slotId, action.patch) : r
+        ),
+      };
+    case "requirement/bulkApply": {
+      const targetSlots = action.dateFilter
+        ? state.slots.filter((s) => s.date === action.dateFilter)
+        : state.slots;
+      return {
+        ...state,
+        roles: state.roles.map((r) => {
+          if (r.id !== action.roleId) return r;
+          return targetSlots.reduce(
+            (role, slot) => setRequirement(role, slot.id, { min: action.min, max: action.max }),
+            r
+          );
+        }),
+      };
+    }
+
+    case "people/replace": {
+      const validPersonIds = new Set(action.people.map((p) => p.id));
+      const assignments = pruneAssignments(
+        state.assignments,
+        new Set(state.slots.map((s) => s.id)),
+        new Set(state.roles.map((r) => r.id)),
+        validPersonIds
+      );
+      return { ...state, people: action.people, assignments };
+    }
+    case "people/update":
+      return {
+        ...state,
+        people: state.people.map((p) => (p.id === action.id ? { ...p, ...action.patch } : p)),
+      };
+    case "people/remove": {
+      const people = state.people.filter((p) => p.id !== action.id);
+      const assignments = pruneAssignments(
+        state.assignments,
+        new Set(state.slots.map((s) => s.id)),
+        new Set(state.roles.map((r) => r.id)),
+        new Set(people.map((p) => p.id))
+      );
+      return { ...state, people, assignments };
+    }
+    case "people/clear":
+      return { ...state, people: [], assignments: [] };
+
+    case "assignments/replace":
+      return { ...state, assignments: action.assignments };
+    case "assignments/place": {
+      const { slotId, roleId, personId } = action;
+      if (state.assignments.some((a) => sameAssignment(a, { slotId, roleId, personId }))) return state;
+      return {
+        ...state,
+        assignments: [...state.assignments, { slotId, roleId, personId, locked: true }],
+      };
+    }
+    case "assignments/remove":
+      return {
+        ...state,
+        assignments: state.assignments.filter((a) => !sameAssignment(a, action)),
+      };
+    case "assignments/swap": {
+      const { a, b } = action;
+      if (sameAssignment({ ...a, locked: false }, b)) return state;
+      let sawA = false;
+      let sawB = false;
+      const assignments = state.assignments.map((assignment) => {
+        if (sameAssignment(assignment, a)) {
+          sawA = true;
+          return { slotId: b.slotId, roleId: b.roleId, personId: a.personId, locked: true };
+        }
+        if (sameAssignment(assignment, b)) {
+          sawB = true;
+          return { slotId: a.slotId, roleId: a.roleId, personId: b.personId, locked: true };
+        }
+        return assignment;
+      });
+      return sawA && sawB ? { ...state, assignments } : state;
+    }
+    case "assignments/toggleLock":
+      return {
+        ...state,
+        assignments: state.assignments.map((a) =>
+          sameAssignment(a, action) ? { ...a, locked: !a.locked } : a
+        ),
+      };
+
+    case "state/replace":
+      return action.project;
+  }
+}

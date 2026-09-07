@@ -5,7 +5,7 @@ import type { Dispatch } from "react";
 import { resizeImageFile } from "@/lib/images";
 import type { Action } from "@/lib/state";
 import type { Product } from "@/lib/types";
-import { Button, Field, inputClass, NumberInput, Section } from "./ui";
+import { Button, Field, inputClass, NumberInput, Section } from "@/app/components/ui";
 
 const FOOD_EMOJIS = [
   "🍛", "🍜", "🍝", "🍚", "🍙", "🍣", "🍤", "🍔", "🍟", "🌭",

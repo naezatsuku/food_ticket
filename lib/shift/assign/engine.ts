@@ -1,0 +1,184 @@
+import { MinCostFlow } from "./graph";
+import { isPersonAvailableForSlot } from "../availability";
+import { requirementFor } from "../roles";
+import type { Assignment, Person, ScheduleResult, ShiftProject, TimeSlot } from "../types";
+
+/** 優先度(0〜5、既定0)が高いほど小さいコストを返す */
+function preferenceCost(person: Person, roleId: string): number {
+  const preference = person.rolePreference[roleId] ?? 0;
+  return 5 - Math.max(0, Math.min(5, preference));
+}
+
+const MIN_FILL_BONUS = -1_000_000;
+
+interface SlotRoleKey {
+  slotId: string;
+  roleId: string;
+}
+
+function keyOf(slotId: string, roleId: string): string {
+  return `${slotId} ${roleId}`;
+}
+
+/**
+ * 希望データと制約から自動でシフトを割り当てる。
+ * 既存の assignments のうち locked=true のものは動かさず、残りだけを
+ * 最小費用流(source→人→人×枠→枠×役割→sink)で再最適化する。
+ *
+ * 層構成:
+ *   source → 人                 : 容量1の辺をmaxSlots本、コストを凸(k-1)^2に増加させ、
+ *                                  均等配分を自然に実現する
+ *   人 → 人×枠                  : 容量1・コスト0。人が同一時刻に複数の役割を
+ *                                  兼務できないようにする(1人1枠/時刻)ための中間ノード
+ *   人×枠 → 枠×役割             : 容量1。本人が入れる時間帯かつ役割の優先度に応じたコスト
+ *   枠×役割 → sink              : 最低人数までは大きな負コストで優先充足し、
+ *                                  残り(〜上限人数)はコスト0
+ */
+export function runAssignment(project: ShiftProject): ScheduleResult {
+  const { slots, roles, people } = project;
+
+  const lockedAssignments = project.assignments.filter((a) => a.locked);
+  const lockedByPerson = new Map<string, number>();
+  const lockedBySlotRole = new Map<string, number>();
+  const lockedPersonSlot = new Set<string>();
+  for (const a of lockedAssignments) {
+    lockedByPerson.set(a.personId, (lockedByPerson.get(a.personId) ?? 0) + 1);
+    const k = keyOf(a.slotId, a.roleId);
+    lockedBySlotRole.set(k, (lockedBySlotRole.get(k) ?? 0) + 1);
+    lockedPersonSlot.add(`${a.personId} ${a.slotId}`);
+  }
+
+  // 枠×役割ノード: 上限人数(ロック分を差し引いた残り)が1以上あるものだけ作る
+  const slotRoleKeys: SlotRoleKey[] = [];
+  const slotRoleRemaining = new Map<string, { min: number; max: number }>();
+  for (const slot of slots) {
+    for (const role of roles) {
+      const req = requirementFor(role, slot.id);
+      const locked = lockedBySlotRole.get(keyOf(slot.id, role.id)) ?? 0;
+      const remainingMax = Math.max(0, req.max - locked);
+      if (remainingMax <= 0) continue;
+      const remainingMin = Math.max(0, Math.min(req.min, remainingMax) - locked);
+      slotRoleKeys.push({ slotId: slot.id, roleId: role.id });
+      slotRoleRemaining.set(keyOf(slot.id, role.id), { min: remainingMin, max: remainingMax });
+    }
+  }
+
+  // ノード番号を割り当てる: 0=source, 人, 人×枠, 枠×役割, sink
+  const source = 0;
+  let nextId = 1;
+  const personNode = new Map<string, number>();
+  for (const p of people) personNode.set(p.id, nextId++);
+
+  // 人×枠・枠×役割ノードは実際に使う組み合わせだけ、下のループで作る
+  const personSlotNode = new Map<string, number>();
+  const slotRoleNode = new Map<string, number>();
+  const slotById = new Map(slots.map((s) => [s.id, s]));
+
+  for (const person of people) {
+    const remainingMaxSlots = Math.max(
+      0,
+      (person.maxSlots ?? project.defaultMaxSlotsPerPerson) - (lockedByPerson.get(person.id) ?? 0)
+    );
+    if (remainingMaxSlots <= 0) continue;
+    for (const { slotId, roleId } of slotRoleKeys) {
+      if (lockedPersonSlot.has(`${person.id} ${slotId}`)) continue;
+      const slot = slotById.get(slotId);
+      if (!slot || !isPersonAvailableForSlot(person, slot)) continue;
+      const psKey = `${person.id} ${slotId}`;
+      if (!personSlotNode.has(psKey)) personSlotNode.set(psKey, nextId++);
+      const srKey = keyOf(slotId, roleId);
+      if (!slotRoleNode.has(srKey)) slotRoleNode.set(srKey, nextId++);
+    }
+  }
+  const sink = nextId++;
+
+  const flow = new MinCostFlow(nextId);
+
+  // source -> 人 (容量1の並列辺、コストは凸に増加)
+  for (const person of people) {
+    const pNode = personNode.get(person.id)!;
+    const remainingMaxSlots = Math.max(
+      0,
+      (person.maxSlots ?? project.defaultMaxSlotsPerPerson) - (lockedByPerson.get(person.id) ?? 0)
+    );
+    for (let k = 1; k <= remainingMaxSlots; k++) {
+      flow.addEdge(source, pNode, 1, (k - 1) * (k - 1));
+    }
+  }
+
+  // 人 -> 人×枠 (容量1・コスト0)
+  for (const [psKey, psNode] of personSlotNode) {
+    const [personId] = psKey.split(" ");
+    flow.addEdge(personNode.get(personId)!, psNode, 1, 0);
+  }
+
+  // 人×枠 -> 枠×役割 (容量1・優先度コスト)
+  const edgeMeta: { edgeId: number; personId: string; slotId: string; roleId: string }[] = [];
+  for (const person of people) {
+    for (const { slotId, roleId } of slotRoleKeys) {
+      const psKey = `${person.id} ${slotId}`;
+      const psNode = personSlotNode.get(psKey);
+      const srNode = slotRoleNode.get(keyOf(slotId, roleId));
+      if (psNode === undefined || srNode === undefined) continue;
+      const slot = slotById.get(slotId);
+      if (!slot || !isPersonAvailableForSlot(person, slot)) continue;
+      const edgeId = flow.addEdge(psNode, srNode, 1, preferenceCost(person, roleId));
+      edgeMeta.push({ edgeId, personId: person.id, slotId, roleId });
+    }
+  }
+
+  // 枠×役割 -> sink (最低人数まで大きな負コスト、残りはコスト0)
+  for (const [key, node] of slotRoleNode) {
+    const remaining = slotRoleRemaining.get(key)!;
+    if (remaining.min > 0) flow.addEdge(node, sink, remaining.min, MIN_FILL_BONUS);
+    if (remaining.max > remaining.min) flow.addEdge(node, sink, remaining.max - remaining.min, 0);
+  }
+
+  flow.run(source, sink);
+
+  const solvedAssignments: Assignment[] = edgeMeta
+    .filter((m) => flow.flowOnEdge(m.edgeId) > 0)
+    .map((m) => ({ slotId: m.slotId, roleId: m.roleId, personId: m.personId, locked: false }));
+
+  const assignments = [...lockedAssignments, ...solvedAssignments];
+  return buildScheduleResult(project, assignments);
+}
+
+/** 現在の assignments から、未割当者・不足枠・均等性のサマリを作る(純粋関数) */
+export function buildScheduleResult(project: ShiftProject, assignments: Assignment[]): ScheduleResult {
+  const { slots, roles, people } = project;
+
+  const countByPerson = new Map<string, number>();
+  const countBySlotRole = new Map<string, number>();
+  for (const a of assignments) {
+    countByPerson.set(a.personId, (countByPerson.get(a.personId) ?? 0) + 1);
+    const k = keyOf(a.slotId, a.roleId);
+    countBySlotRole.set(k, (countBySlotRole.get(k) ?? 0) + 1);
+  }
+
+  const unassignedPeople = people
+    .filter((p) => (countByPerson.get(p.id) ?? 0) === 0)
+    .map((p) => ({ personId: p.id, reason: reasonForUnassigned(p, slots) }));
+
+  const understaffedSlots: ScheduleResult["understaffedSlots"] = [];
+  for (const slot of slots) {
+    for (const role of roles) {
+      const req = requirementFor(role, slot.id);
+      const assigned = countBySlotRole.get(keyOf(slot.id, role.id)) ?? 0;
+      if (assigned < req.min) {
+        understaffedSlots.push({ slotId: slot.id, roleId: role.id, shortage: req.min - assigned });
+      }
+    }
+  }
+
+  const fairness = people.map((p) => ({ personId: p.id, assignedCount: countByPerson.get(p.id) ?? 0 }));
+
+  return { assignments, unassignedPeople, understaffedSlots, fairness };
+}
+
+function reasonForUnassigned(person: Person, slots: TimeSlot[]): string {
+  if (person.available.length === 0) return "入れる時間帯の申告がありません。";
+  const hasMatchingSlot = slots.some((slot) => isPersonAvailableForSlot(person, slot));
+  if (!hasMatchingSlot) return "入れる時間帯に一致する枠がありません。";
+  return "希望時間帯の枠がすべて定員超過でした。";
+}

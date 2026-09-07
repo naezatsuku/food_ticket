@@ -13,31 +13,31 @@ function measure(text: string, sizeMm: number): number {
 const cases: { label: string; ticket: TicketSettings; name: string; price: string }[] = [
   {
     label: "デフォルト(90x50, stub25) + イラスト, 短い商品名",
-    ticket: { widthMm: 90, heightMm: 50, stubEnabled: true, stubWidthMm: 25 },
+    ticket: { widthMm: 90, heightMm: 50, stubEnabled: true, stubWidthMm: 25, borderWidthMm: 0.5 },
     name: "からあげ弁当",
     price: "¥500",
   },
   {
     label: "デフォルト(90x50, stub25) + イラスト, やや長い商品名",
-    ticket: { widthMm: 90, heightMm: 50, stubEnabled: true, stubWidthMm: 25 },
+    ticket: { widthMm: 90, heightMm: 50, stubEnabled: true, stubWidthMm: 25, borderWidthMm: 0.5 },
     name: "スペシャル唐揚げ弁当",
     price: "¥500",
   },
   {
     label: "デフォルト(90x50, stub25) + イラスト, 長い商品名",
-    ticket: { widthMm: 90, heightMm: 50, stubEnabled: true, stubWidthMm: 25 },
+    ticket: { widthMm: 90, heightMm: 50, stubEnabled: true, stubWidthMm: 25, borderWidthMm: 0.5 },
     name: "スペシャルもりもり特製から揚げ弁当",
     price: "¥1,000",
   },
   {
     label: "半券なし(90x50) + イラスト, 長い商品名",
-    ticket: { widthMm: 90, heightMm: 50, stubEnabled: false, stubWidthMm: 25 },
+    ticket: { widthMm: 90, heightMm: 50, stubEnabled: false, stubWidthMm: 25, borderWidthMm: 0.5 },
     name: "スペシャルもりもり特製から揚げ弁当",
     price: "¥1,000",
   },
   {
     label: "小さめの券(70x40, stub20) + イラスト, とても長い商品名",
-    ticket: { widthMm: 70, heightMm: 40, stubEnabled: true, stubWidthMm: 20 },
+    ticket: { widthMm: 70, heightMm: 40, stubEnabled: true, stubWidthMm: 20, borderWidthMm: 0.5 },
     name: "スペシャルもりもり特製から揚げ弁当プレート大盛り",
     price: "¥1,200",
   },
