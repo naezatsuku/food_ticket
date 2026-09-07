@@ -1,4 +1,4 @@
-import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
+import { degrees, PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { columnEdges, MM_TO_PT, resolveGrid, rowEdges, sheetSizeMm, sheetsNeeded, ticketOrigins } from "./geometry";
 import { countInRange, formatTicketNumber, numbersForSheet } from "./numbering";
@@ -119,6 +119,21 @@ function drawTicket(
   }
   // テキスト
   for (const t of layout.texts) {
+    if (t.rotated) {
+      // 時計回りに90度回転(通し番号を短辺に平行にする設定用)。
+      // 回転後に見た目の左上が (t.xMm, t.yTopMm) に来るよう、
+      // 回転前の基準点を横方向に (1 - ASCENT_RATIO) 分だけ右にずらしておく
+      // (通常描画で yTopMm 側にベースラインをずらしているのと対称の補正)。
+      page.drawText(t.text, {
+        x: c.x(ox + t.xMm + t.sizeMm * (1 - ASCENT_RATIO)),
+        y: c.yTop(oy + t.yTopMm),
+        size: t.sizeMm * MM_TO_PT,
+        font: t.weight === "bold" ? fonts.bold : fonts.regular,
+        color: t.color === "muted" ? rgb(0.45, 0.45, 0.45) : INK,
+        rotate: degrees(-90),
+      });
+      continue;
+    }
     page.drawText(t.text, {
       x: c.x(ox + t.xMm),
       y: c.yTop(oy + t.yTopMm + t.sizeMm * ASCENT_RATIO),
@@ -227,6 +242,7 @@ export async function generateTicketsPdf(input: PdfJobInput): Promise<PdfJobResu
           priceText,
           numberText: formatTicketNumber(numbering, n),
           illustration: product.illustration,
+          numberOrientation: numbering.orientation,
         },
         measure
       );

@@ -34,6 +34,8 @@ export interface NumberingSettings {
   prefix: string;
   /** ゼロ埋め桁数 */
   digits: 3 | 4 | 5;
+  /** 番号の向き。"horizontal" = 長辺に平行(従来どおり)、"vertical" = 短辺に平行(90度回転) */
+  orientation: "horizontal" | "vertical";
 }
 
 export type PaperSize = "A4" | "B5" | "A3";
@@ -97,7 +99,7 @@ export function defaultAppState(): AppState {
   return {
     products: [sample],
     ticket: { widthMm: 49, heightMm: 17, stubEnabled: true, stubWidthMm: 13, borderWidthMm: 0.5 },
-    numbering: { prefix: "No.", digits: 4 },
+    numbering: { prefix: "No.", digits: 4, orientation: "horizontal" },
     sheet: {
       paper: "A3",
       orientation: "portrait",

@@ -18,12 +18,14 @@ export function TicketView({
   ticket,
   product,
   numberText,
+  numberOrientation,
   scale,
   fontTick,
 }: {
   ticket: TicketSettings;
   product: Product;
   numberText: string;
+  numberOrientation: "horizontal" | "vertical";
   scale: number;
   fontTick: number;
 }) {
@@ -36,12 +38,13 @@ export function TicketView({
           priceText: formatPrice(product.price),
           numberText,
           illustration: product.illustration,
+          numberOrientation,
         },
         measure
       ),
     // fontTick はフォントロード後の再計測トリガー
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ticket, product.name, product.price, product.illustration, numberText, fontTick]
+    [ticket, product.name, product.price, product.illustration, numberText, numberOrientation, fontTick]
   );
   const px = (mm: number) => mm * scale;
 
@@ -109,13 +112,17 @@ export function TicketView({
           key={i}
           className="absolute whitespace-nowrap"
           style={{
-            left: px(t.xMm),
+            // 回転時は、回転後に見た目の左上が (t.xMm, t.yTopMm) に来るよう
+            // 回転前の基準点を右に t.sizeMm 分ずらしておく(左上を軸に時計回り90度回転)
+            left: px(t.rotated ? t.xMm + t.sizeMm : t.xMm),
             top: px(t.yTopMm),
             fontSize: px(t.sizeMm),
             lineHeight: 1,
             fontWeight: t.weight === "bold" ? 700 : 400,
             fontFamily: '"Ticket JP", sans-serif',
             color: t.color === "muted" ? "#737373" : INK,
+            transform: t.rotated ? "rotate(90deg)" : undefined,
+            transformOrigin: t.rotated ? "0 0" : undefined,
           }}
         >
           {t.text}

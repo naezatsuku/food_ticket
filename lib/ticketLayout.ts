@@ -16,6 +16,12 @@ export interface TextElement {
   weight: "regular" | "bold";
   /** "ink" = 黒、"muted" = グレー */
   color: "ink" | "muted";
+  /**
+   * true なら時計回りに90度回転して描画する(通し番号を短辺に平行にする設定用)。
+   * (xMm, yTopMm) を左上として、横方向にフォントサイズ分、縦方向に文字列の長さ分の
+   * 領域を占める(回転後の見た目の外接矩形がこの領域になる)。
+   */
+  rotated?: boolean;
 }
 
 export interface RectMm {
@@ -132,12 +138,54 @@ export interface TicketContent {
   priceText: string;
   numberText: string;
   illustration: Illustration;
+  /** 通し番号の向き。省略時は "horizontal"(長辺に平行、従来どおり) */
+  numberOrientation?: "horizontal" | "vertical";
 }
 
 const PAD = 3; // 券内の基本パディング(mm)
 const NUMBER_SIZE = 2.2; // 番号のフォントサイズ(mm。商品名・値段より控えめに)
 const PRICE_MAX_SIZE = 2.2; // 値段の最大フォントサイズ(mm。番号と同じサイズに)
 const MIN_SPACING = 1; // 番号・商品名・値段の間の最小スペース(mm)
+
+interface NumberPlacement {
+  text: TextElement;
+  /** 番号がその場で消費する横幅(mm)。縦書き時のみ非ゼロで、後続のテキストはこの分右にずらす */
+  widthUsed: number;
+  /** 番号がその場で消費する高さ(mm)。横書き時のみ非ゼロで、後続のテキストはこの分下にずらす */
+  heightUsed: number;
+}
+
+/**
+ * 通し番号のテキスト要素を組み立てる。
+ * - 横書き(従来): (x, y) を左上に、利用可能な幅に収まるフォントサイズで描く。
+ *   高さ方向に NUMBER_SIZE 分のスペースを消費したとみなす(実際のフィット結果に関わらず一定)。
+ * - 縦書き(短辺に平行): 90度回転して描く。利用可能な高さに収まるフォントサイズを選び、
+ *   横方向にそのフォントサイズ分のスペースを消費する。
+ */
+function layoutNumber(
+  measure: MeasureFn,
+  numberText: string,
+  xMm: number,
+  yMm: number,
+  availableWidthMm: number,
+  availableHeightMm: number,
+  orientation: "horizontal" | "vertical"
+): NumberPlacement {
+  if (orientation === "vertical") {
+    const sizeMm = fitFontSize(measure, numberText, availableHeightMm, NUMBER_SIZE, 1.2);
+    return {
+      text: { text: numberText, xMm, yTopMm: yMm, sizeMm, weight: "regular", color: "ink", rotated: true },
+      widthUsed: sizeMm,
+      heightUsed: 0,
+    };
+  }
+  const sizeMm = fitFontSize(measure, numberText, availableWidthMm, NUMBER_SIZE, 1.5);
+  return {
+    text: { text: numberText, xMm, yTopMm: yMm, sizeMm, weight: "regular", color: "ink" },
+    widthUsed: 0,
+    heightUsed: NUMBER_SIZE,
+  };
+}
 
 /**
  * 券1枚分のレイアウトを計算する純粋関数。
@@ -160,24 +208,28 @@ export function computeTicketLayout(
   const stub = ticket.stubEnabled;
   const stubW = stub ? ticket.stubWidthMm : 0;
   const perforationX = stub ? stubW : null;
+  const numberOrientation = content.numberOrientation ?? "horizontal";
 
   // ---- 半券(左側) ----
   if (stub) {
     const stubInnerW = stubW - PAD * 2;
-    texts.push({
-      text: content.numberText,
-      xMm: PAD,
-      yTopMm: PAD,
-      sizeMm: fitFontSize(measure, content.numberText, stubInnerW, NUMBER_SIZE, 1.5),
-      weight: "regular",
-      color: "ink",
-    });
+    const stubPlacement = layoutNumber(
+      measure,
+      content.numberText,
+      PAD,
+      PAD,
+      stubInnerW,
+      contentBottom - PAD,
+      numberOrientation
+    );
+    texts.push(stubPlacement.text);
     if (content.name) {
-      const nameTop = PAD + NUMBER_SIZE + 2;
+      const nameLeft = PAD + stubPlacement.widthUsed + (stubPlacement.widthUsed > 0 ? MIN_SPACING : 0);
+      const nameTop = PAD + stubPlacement.heightUsed + (stubPlacement.heightUsed > 0 ? 2 : 0);
       const fitted = fitWrappedText(
         measure,
         content.name,
-        stubInnerW,
+        stubInnerW - stubPlacement.widthUsed - (stubPlacement.widthUsed > 0 ? MIN_SPACING : 0),
         contentBottom - nameTop,
         4,
         2
@@ -191,7 +243,7 @@ export function computeTicketLayout(
       fitted.lines.forEach((line, i) => {
         texts.push({
           text: line,
-          xMm: PAD,
+          xMm: nameLeft,
           yTopMm: yStart + i * fitted.sizeMm * LINE_HEIGHT,
           sizeMm: fitted.sizeMm,
           weight: "regular",
@@ -202,9 +254,20 @@ export function computeTicketLayout(
   }
 
   // ---- 本券(メイン領域) ----
-  const mainX0 = stub ? stubW + PAD : PAD;
+  const mainX0Base = stub ? stubW + PAD : PAD;
   const mainX1 = w - PAD;
-  const nameTop = PAD + NUMBER_SIZE + MIN_SPACING; // 商品名を置ける上限(番号の下)
+  const mainPlacement = layoutNumber(
+    measure,
+    content.numberText,
+    mainX0Base,
+    PAD,
+    mainX1 - mainX0Base - PAD,
+    contentBottom - PAD,
+    numberOrientation
+  );
+  // 番号が縦書きなら横方向に、横書きなら縦方向にスペースを消費する
+  const mainX0 = mainX0Base + mainPlacement.widthUsed + (mainPlacement.widthUsed > 0 ? MIN_SPACING : 0);
+  const nameTop = PAD + mainPlacement.heightUsed + (mainPlacement.heightUsed > 0 ? MIN_SPACING : 0); // 商品名を置ける上限
 
   // 商品名がこれを下回ると文字がつぶれて読みにくくなるため、
   // イラストを控えめにしてでも確保したい下限サイズ
@@ -269,16 +332,8 @@ export function computeTicketLayout(
     }
   }
 
-  // 番号(左上) - 本券側は、利用可能な幅に収まるよう自動縮小
-  const numberSize = fitFontSize(measure, content.numberText, mainX1 - mainX0 - PAD, NUMBER_SIZE, 1.5);
-  texts.push({
-    text: content.numberText,
-    xMm: mainX0,
-    yTopMm: PAD,
-    sizeMm: numberSize,
-    weight: "regular",
-    color: "ink",
-  });
+  // 番号(左上、または縦書き時は左側の縦帯)
+  texts.push(mainPlacement.text);
 
   // 値段(下端に固定) - 重なり防止のため priceTop を再計算
   if (content.priceText) {

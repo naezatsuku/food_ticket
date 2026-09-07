@@ -108,6 +108,32 @@ export function NumberingPanel({
           </select>
         </Field>
       </div>
+      <Field label="番号の向き">
+        <div className="flex gap-4 text-sm">
+          <label className="flex items-center gap-1">
+            <input
+              type="radio"
+              name="numbering-orientation"
+              checked={numbering.orientation === "horizontal"}
+              onChange={() =>
+                dispatch({ type: "numbering/set", patch: { orientation: "horizontal" } })
+              }
+            />
+            長辺に平行(従来どおり)
+          </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="radio"
+              name="numbering-orientation"
+              checked={numbering.orientation === "vertical"}
+              onChange={() =>
+                dispatch({ type: "numbering/set", patch: { orientation: "vertical" } })
+              }
+            />
+            短辺に平行(90度回転)
+          </label>
+        </div>
+      </Field>
       <p className="text-xs text-slate-400">
         連番は商品ごとに独立しています。開始番号は「PDF出力」で指定します。
       </p>
