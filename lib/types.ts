@@ -37,6 +37,8 @@ export interface NumberingSettings {
 export type PaperSize = "A4" | "B5" | "A3";
 export type Orientation = "portrait" | "landscape";
 export type CutGuideStyle = "dashed" | "crop" | "none";
+/** 通し番号の割り当て順序: "row" = 横方向(行優先)、"column" = 縦方向(列優先) */
+export type NumberDirection = "row" | "column";
 
 /** 用紙・シートレイアウト設定 */
 export interface SheetSettings {
@@ -47,6 +49,8 @@ export interface SheetSettings {
   cutGuide: CutGuideStyle;
   /** 手動の行×列指定。null なら自動計算 */
   manualGrid: { rows: number; cols: number } | null;
+  /** 番号を振る順序 */
+  numberDirection: NumberDirection;
 }
 
 /** 発行ログの1件 */
@@ -100,6 +104,7 @@ export function defaultAppState(): AppState {
       marginMm: 0,
       cutGuide: "dashed",
       manualGrid: null,
+      numberDirection: "row",
     },
     logs: [],
     selectedProductId: sample.id,

@@ -42,6 +42,7 @@ describe("generateTicketsPdf(統合)", () => {
       marginMm: 10,
       cutGuide: "dashed",
       manualGrid: null,
+      numberDirection: "row",
     };
     const result = await generateTicketsPdf({
       product: {

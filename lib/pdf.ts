@@ -1,6 +1,6 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { MM_TO_PT, resolveGrid, sheetSizeMm, sheetsNeeded, ticketOrigins } from "./geometry";
+import { MM_TO_PT, resolveGrid, sheetSizeMm, sheetsNeeded, ticketOrder, ticketOrigins } from "./geometry";
 import { countInRange, formatTicketNumber, numbersForSheet } from "./numbering";
 import { computeTicketLayout, formatPrice, type MeasureFn, type TicketLayout } from "./ticketLayout";
 import { dataUrlToBytes, emojiToPngDataUrl } from "./images";
@@ -212,6 +212,7 @@ export async function generateTicketsPdf(input: PdfJobInput): Promise<PdfJobResu
 
   const illustration = await embedIllustration(doc, product);
   const origins = ticketOrigins(grid, ticket.widthMm, ticket.heightMm);
+  const order = ticketOrder(grid, sheet.numberDirection);
   const priceText = formatPrice(product.price);
 
   doc.setTitle(`食券 ${product.name}`);
@@ -231,7 +232,7 @@ export async function generateTicketsPdf(input: PdfJobInput): Promise<PdfJobResu
         },
         measure
       );
-      drawTicket(page, origins[i], layout, fonts, illustration, sheetH);
+      drawTicket(page, origins[order[i]], layout, fonts, illustration, sheetH);
     });
   }
 
