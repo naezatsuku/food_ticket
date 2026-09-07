@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState, type Dispatch } from "react";
-import { Button, ErrorList, Field, inputClass, Section } from "@/app/components/ui";
+import { Fragment, useMemo, useRef, useState, type Dispatch } from "react";
+import { Button, ErrorList, Field, inputClass, NumberInput, Section } from "@/app/components/ui";
 import type { ColumnRole, ImportFormat } from "@/lib/shift/import/detect";
 import {
   detectFormat,
@@ -22,7 +22,7 @@ import {
 import { parseWorkbookFile, type ParsedWorkbook } from "@/lib/shift/import/workbook";
 import { formatDateShort } from "@/lib/shift/slots";
 import type { Action } from "@/lib/shift/state";
-import type { ShiftProject } from "@/lib/shift/types";
+import type { AvailabilityRange, Person, ShiftProject } from "@/lib/shift/types";
 
 const COLUMN_ROLE_LABELS: Record<ColumnRole, string> = {
   name: "氏名",
@@ -524,13 +524,18 @@ export function ImportPanel({
 
 function PeopleList({ project, dispatch }: { project: ShiftProject; dispatch: Dispatch<Action> }) {
   const { people } = project;
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   return (
     <Section title={`現在の名簿(${people.length}人)`} defaultOpen={people.length > 0}>
       {people.length === 0 ? (
         <p className="text-sm text-slate-400">まだメンバーが取り込まれていません。</p>
       ) : (
         <>
-          <div className="max-h-72 overflow-y-auto">
+          <p className="text-xs text-slate-400">
+            「編集」から、取り込み後でも一人ずつ入れる時間帯や上限コマ数を編集し直せます。
+          </p>
+          <div className="max-h-[32rem] overflow-y-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-slate-500">
@@ -541,24 +546,48 @@ function PeopleList({ project, dispatch }: { project: ShiftProject; dispatch: Di
                 </tr>
               </thead>
               <tbody>
-                {people.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-100">
-                    <td className="py-1 pr-2 whitespace-nowrap">{p.name}</td>
-                    <td className="py-1 pr-2">
-                      {p.available.length === 0
-                        ? "なし"
-                        : p.available
-                            .map((r) => `${formatDateShort(r.date)} ${r.start}〜${r.end}`)
-                            .join(", ")}
-                    </td>
-                    <td className="py-1 pr-2">{p.maxSlots ?? `既定(${project.defaultMaxSlotsPerPerson})`}</td>
-                    <td className="py-1 text-right">
-                      <Button variant="danger" onClick={() => dispatch({ type: "people/remove", id: p.id })}>
-                        削除
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {people.map((p) => {
+                  const isEditing = editingId === p.id;
+                  return (
+                    <Fragment key={p.id}>
+                      <tr className="border-b border-slate-100">
+                        <td className="py-1 pr-2 whitespace-nowrap">{p.name}</td>
+                        <td className="py-1 pr-2">
+                          {p.available.length === 0
+                            ? "なし"
+                            : p.available
+                                .map((r) => `${formatDateShort(r.date)} ${r.start}〜${r.end}`)
+                                .join(", ")}
+                        </td>
+                        <td className="py-1 pr-2">
+                          {p.maxSlots ?? `既定(${project.defaultMaxSlotsPerPerson})`}
+                        </td>
+                        <td className="py-1 text-right whitespace-nowrap">
+                          <Button onClick={() => setEditingId(isEditing ? null : p.id)}>
+                            {isEditing ? "閉じる" : "編集"}
+                          </Button>{" "}
+                          <Button
+                            variant="danger"
+                            onClick={() => dispatch({ type: "people/remove", id: p.id })}
+                          >
+                            削除
+                          </Button>
+                        </td>
+                      </tr>
+                      {isEditing && (
+                        <tr className="border-b border-slate-100 bg-slate-50">
+                          <td colSpan={4} className="p-2">
+                            <PersonEditor
+                              person={p}
+                              defaultMaxSlots={project.defaultMaxSlotsPerPerson}
+                              dispatch={dispatch}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -573,5 +602,103 @@ function PeopleList({ project, dispatch }: { project: ShiftProject; dispatch: Di
         </>
       )}
     </Section>
+  );
+}
+
+/** 名簿1人分の「入れる時間帯」「上限コマ数」をその場で編集するフォーム */
+function PersonEditor({
+  person,
+  defaultMaxSlots,
+  dispatch,
+}: {
+  person: Person;
+  defaultMaxSlots: number;
+  dispatch: Dispatch<Action>;
+}) {
+  function setAvailable(available: AvailabilityRange[]) {
+    dispatch({ type: "people/update", id: person.id, patch: { available } });
+  }
+  function updateRange(index: number, patch: Partial<AvailabilityRange>) {
+    setAvailable(person.available.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
+  function removeRange(index: number) {
+    setAvailable(person.available.filter((_, i) => i !== index));
+  }
+  function addRange() {
+    setAvailable([...person.available, { date: "", start: "09:00", end: "10:00" }]);
+  }
+
+  const useCustomMaxSlots = person.maxSlots !== null;
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <span className="mb-1 block text-[11px] font-medium text-slate-500">入れる時間帯</span>
+        <div className="space-y-1">
+          {person.available.map((r, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-1">
+              <input
+                type="date"
+                className={`${inputClass} w-36`}
+                value={r.date}
+                onChange={(e) => updateRange(i, { date: e.target.value })}
+              />
+              <input
+                type="time"
+                className={`${inputClass} w-24`}
+                value={r.start}
+                onChange={(e) => updateRange(i, { start: e.target.value })}
+              />
+              <span className="text-slate-400">〜</span>
+              <input
+                type="time"
+                className={`${inputClass} w-24`}
+                value={r.end}
+                onChange={(e) => updateRange(i, { end: e.target.value })}
+              />
+              <Button variant="danger" onClick={() => removeRange(i)}>
+                削除
+              </Button>
+            </div>
+          ))}
+          {person.available.length === 0 && (
+            <p className="text-xs text-slate-400">時間帯が登録されていません。</p>
+          )}
+        </div>
+        <Button onClick={addRange}>+ 時間帯を追加</Button>
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={useCustomMaxSlots}
+            onChange={(e) =>
+              dispatch({
+                type: "people/update",
+                id: person.id,
+                patch: { maxSlots: e.target.checked ? defaultMaxSlots : null },
+              })
+            }
+          />
+          上限コマ数を個別に指定する(指定しなければ既定の{defaultMaxSlots}コマ)
+        </label>
+        {useCustomMaxSlots && (
+          <div className="mt-1 w-24">
+            <NumberInput
+              value={person.maxSlots ?? defaultMaxSlots}
+              min={0}
+              onChange={(n) =>
+                dispatch({
+                  type: "people/update",
+                  id: person.id,
+                  patch: { maxSlots: Math.max(0, Math.trunc(n)) },
+                })
+              }
+            />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
